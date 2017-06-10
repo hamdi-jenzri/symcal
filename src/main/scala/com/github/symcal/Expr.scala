@@ -12,6 +12,12 @@ trait Expr {
   override def toString: String
 }
 
+object Expr {
+  implicit def intToConst(x: Int): Const = {
+    Const(x)
+  }
+}
+
 case class Const(x: Int) extends Expr {
   override def toInt: Int = x
 
