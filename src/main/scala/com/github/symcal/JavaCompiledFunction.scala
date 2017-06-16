@@ -5,14 +5,14 @@ import java.util.function.DoubleUnaryOperator
 
 import net.openhft.compiler.CompilerUtils
 
-case class CompiledFunction(f: DoubleUnaryOperator) extends AnyVal {
+case class JavaCompiledFunction(f: DoubleUnaryOperator) extends AnyVal {
   def apply(x: Double): Double = f.applyAsDouble(x)
 }
 
-object CompiledFunction {
+object JavaCompiledFunction {
   val uniqueCounter = new AtomicInteger(0)
 
-  def compile(arg: (String, String)): CompiledFunction = {
+  def compile(arg: (String, String)): JavaCompiledFunction = {
     val (x, exprUsingX) = arg
     val n = uniqueCounter.incrementAndGet()
     val className = s"NewCompiledFunction$n"
@@ -29,9 +29,14 @@ object CompiledFunction {
          |  }
          |}
       """.stripMargin
+    JavaFileCompiler.compileThroughFile(fqClassName, javaCode)
+  }
+}
 
+object JavaFileCompiler {
+  def compileThroughFile(fqClassName: String, javaCode: String): JavaCompiledFunction = {
     val aClass = CompilerUtils.CACHED_COMPILER.loadFromJava(fqClassName, javaCode)
     val runner = aClass.newInstance.asInstanceOf[DoubleUnaryOperator]
-    CompiledFunction(runner)
+    JavaCompiledFunction(runner)
   }
 }
