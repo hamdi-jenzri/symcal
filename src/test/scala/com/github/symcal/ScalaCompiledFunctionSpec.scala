@@ -29,20 +29,22 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
     val averageCompileTime = compileTimes.map(_._1).sum / total
     val averageRunTime = compileTimes.map(_._2).sum / total
     println(s"Average compile time for Scala-compiled function: ${averageCompileTime / 1000000} ms; running time $averageRunTime ns")
+    println(s"Worst times for Scala-compiled function: compilation ${compileTimes.map(_._1).max / 1000000} ms; run time ${compileTimes.map(_._2).max} ns")
   }
 
   it should "measure JVM-amortized time for running a trigonometric function" in {
     val total = 10000
     val f = ScalaCompiledFunction.compile("x" → s"Math.sin(x + 1)")
 
-    val results = (1 to total).map { i ⇒
+    val resultsRaw = (1 to total).map { i ⇒
       val initTime = System.nanoTime()
       val x = f(125)
       val evaluated = System.nanoTime()
       evaluated - initTime
-    }.takeRight(100)
+    }
+    val results = resultsRaw.takeRight(100)
     val averageRunTime = results.sum / results.length
-    println(s"Average amortized running time for Scala-compiled function: $averageRunTime ns; best time: ${results.min} ns")
+    println(s"Average amortized running time for Scala-compiled function: $averageRunTime ns; best time: ${results.min} ns; worst time: ${resultsRaw.max} ns")
   }
 
 }

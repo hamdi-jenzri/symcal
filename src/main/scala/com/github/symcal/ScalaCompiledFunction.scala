@@ -11,10 +11,8 @@ object ScalaCompiledFunction {
 
     val scalaCode =
       s"""
-         |new Function1[Double, Double] {
-         |  override def apply($x: Double): Double = {
+         |{(x: Double) =>
          |    $exprUsingX
-         |  }
          |}
       """.stripMargin
 
