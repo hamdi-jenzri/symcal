@@ -34,7 +34,7 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
 
   it should "measure JVM-amortized time for running a trigonometric function" in {
     val total = 10000
-    val f = ScalaCompiledFunction.compile("x" → s"Math.sin(x + 1)")
+    val f = ScalaCompiledFunction.compile("x" → s"scala.math.sin(x + 1)")
 
     val resultsRaw = (1 to total).map { i ⇒
       val initTime = System.nanoTime()
