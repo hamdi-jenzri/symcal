@@ -53,7 +53,7 @@ Here's a solution to overcoming this problem: http://atamur.blogspot.com/2009/10
 
     private val compiler =
       Option(ToolProvider.getSystemJavaCompiler)
-        .getOrElse(throw new IllegalStateException("Cannot find the system Java compiler. Check that your class path includes tools.jar!"))
+        .getOrElse(throw new IllegalStateException("Cannot find the system Java compiler. Check that your class path includes tools.jar"))
 
     // This class loader delegates to the given `loader`.
     private val classLoader = new ClassLoaderImpl(loader)
@@ -65,8 +65,7 @@ Here's a solution to overcoming this problem: http://atamur.blogspot.com/2009/10
     val javaFileManager = new FileManagerImpl(localFileManager, classLoader)
 
     /**
-      * Compile Java source in <var>javaSource</name> and return the resulting
-      * class.
+      * Compile Java source in <var>javaSource</name> and return the resulting class.
       * <p>
       * Thread safety: this method is thread safe if the <var>javaSource</var>
       * and <var>diagnosticsList</var> are isolated to this thread.
