@@ -158,3 +158,21 @@ public class DynamicJavaCompiler {
         runIt();
     }
 }
+
+/*
+example code from https://stackoverflow.com/questions/19494907/scala-run-time-code-compilation?noredirect=1&lq=1
+
+JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Iterable<? extends JavaFileObject> compilationUnits = Arrays.asList(javaFileObjects);
+    StringBuilder builder = new StringBuilder();
+    builder.append(service.getConfig().getProp("coreLib"));
+    builder.append(";" +result.getCodeContext().getOmClasspath());
+    builder.append(";" +jarBuilder.toString());
+    builder.append(";" +service.getConfig().getProp("tempCodeGen"));
+    String[] compileOptions = new String[]{"-d", result.getCodeContext().getOmClasspath(),"-cp",builder.toString()} ;
+    Iterable<String> compilationOptionss = Arrays.asList(compileOptions);
+    DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<JavaFileObject>();
+    CompilationTask compilerTask = compiler.getTask(null, stdFileManager, diagnostics, compilationOptionss, null, compilationUnits) ;
+    boolean status = compilerTask.call();
+
+ */

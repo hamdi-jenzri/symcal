@@ -29,7 +29,8 @@ object JavaCompiledFunction {
          |  }
          |}
       """.stripMargin
-    JavaFileCompiler.compileThroughFile(fqClassName, javaCode)
+//    JavaFileCompiler.compileThroughFile(fqClassName, javaCode)
+    IBMJavaMemoryCompiler.compileThroughMemory(fqClassName, javaCode)
   }
 }
 
@@ -37,6 +38,16 @@ object JavaFileCompiler {
   def compileThroughFile(fqClassName: String, javaCode: String): JavaCompiledFunction = {
     val aClass = CompilerUtils.CACHED_COMPILER.loadFromJava(fqClassName, javaCode)
     val runner = aClass.newInstance.asInstanceOf[DoubleUnaryOperator]
+    JavaCompiledFunction(runner)
+  }
+}
+
+object IBMJavaMemoryCompiler {
+  val javaStringCompiler = new CharSequenceCompiler[DoubleUnaryOperator](this.getClass.getClassLoader, null)
+
+  def compileThroughMemory(fqClassName: String, javaCode: String): JavaCompiledFunction = {
+    val aClass = javaStringCompiler.compile(fqClassName, javaCode, null)
+    val runner = aClass.newInstance
     JavaCompiledFunction(runner)
   }
 }
