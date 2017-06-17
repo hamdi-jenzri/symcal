@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, IOException, InputS
 import java.net.URI
 import java.util.function.DoubleUnaryOperator
 import javax.tools.JavaFileObject.Kind
-import javax.tools.{DiagnosticCollector, FileObject, ForwardingJavaFileManager, JavaCompiler, JavaFileManager, JavaFileObject, SimpleJavaFileObject, StandardLocation, ToolProvider}
+import javax.tools.{DiagnosticCollector, FileObject, ForwardingJavaFileManager, JavaCompiler, JavaFileManager, JavaFileObject, SimpleJavaFileObject, StandardJavaFileManager, StandardLocation, ToolProvider}
 
 import com.github.symcal.JavaCompiledFunction
 
@@ -40,7 +40,6 @@ object JavaInMemoryCompiler {
   /*
 One probably useful thing to add: the approach noted here won't work if your code resides inside a container so that actual codebase was loaded by a custom classloader (i.e. not the system one). For example if you try to use the method outlined above inside a J2EE container - trying to compile code that depends on the code already loaded into the container you will most probably fail. The reason is that StandardFileManager uses JVM classpath for resolving dependencies.
 Here's a solution to overcoming this problem: http://atamur.blogspot.com/2009/10/using-built-in-javacompiler-with-custom.html
-
  */
   /**
     * Construct a new instance which delegates to the named class loader.
@@ -54,14 +53,16 @@ Here's a solution to overcoming this problem: http://atamur.blogspot.com/2009/10
 
     private val compiler =
       Option(ToolProvider.getSystemJavaCompiler)
-        .getOrElse(throw new IllegalStateException("Cannot find the system Java compiler. Check that your class path includes tools.jar"))
+        .getOrElse(throw new IllegalStateException("Cannot find the system Java compiler. Check that your class path includes tools.jar!"))
 
     // This class loader delegates to the given `loader`.
     private val classLoader = new ClassLoaderImpl(loader)
     private val diagnostics = new DiagnosticCollector[JavaFileObject]
-    private val standardFileManager: JavaFileManager = compiler.getStandardFileManager(diagnostics, null, null)
+    private val standardJavaFileManager: StandardJavaFileManager = compiler.getStandardFileManager(diagnostics, null, null)
+    // Workaround for class loaders that are running within a container.
+    private val localFileManager: JavaFileManager = new CustomClassloaderJavaFileManager(loader, standardJavaFileManager)
     // This file manager delegates to the standard file manager.
-    val javaFileManager = new FileManagerImpl(standardFileManager, classLoader)
+    val javaFileManager = new FileManagerImpl(localFileManager, classLoader)
 
     /**
       * Compile Java source in <var>javaSource</name> and return the resulting
