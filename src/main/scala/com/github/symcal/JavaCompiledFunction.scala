@@ -3,8 +3,12 @@ package com.github.symcal
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.DoubleUnaryOperator
 
-import net.openhft.compiler.CompilerUtils
+import com.github.symcal.javacompiler.JavaInMemoryCompiler
 
+/** Adapt [[DoubleUnaryOperator]] to the usual function interface by adding `apply()`.
+  *
+  * @param f A Java function.
+  */
 case class JavaCompiledFunction(f: DoubleUnaryOperator) extends AnyVal {
   def apply(x: Double): Double = f.applyAsDouble(x)
 }
@@ -16,10 +20,10 @@ object JavaCompiledFunction {
     val (x, exprUsingX) = arg
     val n = uniqueCounter.incrementAndGet()
     val className = s"NewCompiledFunction$n"
-    val packageName = "com.github.symcal.compiled_function"
+    val packageName = "com.github.symcal.java_compiled_function"
     val fqClassName = s"$packageName.$className"
 
-    val javaCode =
+    val javaCode: String =
       s"""
          |package $packageName;
          |import java.util.function.DoubleUnaryOperator;
@@ -29,25 +33,6 @@ object JavaCompiledFunction {
          |  }
          |}
       """.stripMargin
-//    JavaFileCompiler.compileThroughFile(fqClassName, javaCode)
-    IBMJavaMemoryCompiler.compileThroughMemory(fqClassName, javaCode)
-  }
-}
-
-object JavaFileCompiler {
-  def compileThroughFile(fqClassName: String, javaCode: String): JavaCompiledFunction = {
-    val aClass = CompilerUtils.CACHED_COMPILER.loadFromJava(fqClassName, javaCode)
-    val runner = aClass.newInstance.asInstanceOf[DoubleUnaryOperator]
-    JavaCompiledFunction(runner)
-  }
-}
-
-object IBMJavaMemoryCompiler {
-  val javaStringCompiler = new CharSequenceCompiler[DoubleUnaryOperator](this.getClass.getClassLoader, null)
-
-  def compileThroughMemory(fqClassName: String, javaCode: String): JavaCompiledFunction = {
-    val aClass = javaStringCompiler.compile(fqClassName, javaCode, null)
-    val runner = aClass.newInstance
-    JavaCompiledFunction(runner)
+    JavaInMemoryCompiler.compile(fqClassName, javaCode)
   }
 }
