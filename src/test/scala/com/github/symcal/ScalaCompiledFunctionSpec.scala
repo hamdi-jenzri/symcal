@@ -17,7 +17,7 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
   it should "measure time for compiling and running a function" in {
     val total = 100
 
-    val compileTimes = (1 to total).map { i ⇒
+    val compileAndRunTimes = (1 to total).map { i ⇒
       val initTime = System.nanoTime()
       val f = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" → s"x + $i")
       val compiled = System.nanoTime()
@@ -26,11 +26,11 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
       (compiled - initTime, evaluated - compiled)
     }
 
-    val averageCompileTime = compileTimes.map(_._1).sum / total
-    val averageRunTime = compileTimes.map(_._2).sum / total
+    val averageCompileTime = compileAndRunTimes.map(_._1).sum / total
+    val averageRunTime = compileAndRunTimes.map(_._2).sum / total
     println(s"Average compile time for Scala-compiled function: ${averageCompileTime / 1000000} ms; running time $averageRunTime ns")
-    println(s"Best times for Scala-compiled function: compilation ${compileTimes.map(_._1).min / 1000000} ms; run time ${compileTimes.map(_._2).min} ns")
-    println(s"Worst times for Scala-compiled function: compilation ${compileTimes.map(_._1).max / 1000000} ms; run time ${compileTimes.map(_._2).max} ns")
+    println(s"Best times for Scala-compiled function: compilation ${compileAndRunTimes.map(_._1).min / 1000000} ms; run time ${compileAndRunTimes.map(_._2).min} ns")
+    println(s"Worst times for Scala-compiled function: compilation ${compileAndRunTimes.map(_._1).max / 1000000} ms; run time ${compileAndRunTimes.map(_._2).max} ns")
   }
 
   it should "measure JVM-amortized time for running a trigonometric function" in {
