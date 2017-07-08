@@ -5,9 +5,17 @@ trait Expr {
     Plus(this, x)
   }
 
+  def *(x: Expr): Expr = {
+    Product(this, x)
+  }
+
+  def #^(d: Int): Expr = IntPow(this, d)
+
   def toInt: Int
 
   def diff(x: Var): Expr
+
+  def simplify: Expr = this
 
   override def toString: String
 }
@@ -31,7 +39,29 @@ case class Plus(x: Expr, y: Expr) extends Expr {
 
   def diff(z: Var): Expr = x.diff(z) + y.diff(z)
 
+  override def simplify: Expr = (x.simplify, y.simplify) match {
+    case (Const(0), ys) => ys
+    case (xs, Const(0)) => xs
+    case (Const(a), Const(b)) => Const(a + b)
+    case (xs, ys) => xs + ys
+  }
   override def toString: String = x.toString + " + " + y.toString
+}
+
+case class Product(x: Expr, y: Expr) extends Expr {
+  override def toInt: Int = x.toInt * y.toInt
+
+  override def diff(z: Var): Expr = Product(x.diff(z), y) + Product(x, y.diff(z))
+
+  override def simplify: Expr = (x.simplify, y.simplify) match {
+    case (Const(1), ys) => ys
+    case (xs, Const(1)) => xs
+    case (Const(0), _) => Const(0)
+    case (_, Const(0)) => Const(0)
+    case (Const(a), Const(b)) => Const(a * b)
+    case (xs, ys) => xs * ys
+  }
+  override def toString: String = s"($x) * ($y)"
 }
 
 case class Var(name: Symbol) extends Expr {
@@ -41,4 +71,21 @@ case class Var(name: Symbol) extends Expr {
   def diff(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
 
   override def toString: String = name.name
+}
+
+case class IntPow(x: Expr, d: Int) extends Expr {
+  override def toInt: Int = Math.pow(x.toInt, d).toInt
+
+  override def diff(z: Var): Expr = d match {
+    case 0 => 0
+    case 1 => x.diff(z)
+    case _ => d * x.diff(z) * IntPow(x, d - 1)
+  }
+
+  override def simplify: Expr = x.simplify match {
+    case Const(1) => Const(1)
+    case Const(0) if d >= 0 => Const(0)
+    case xs => IntPow(xs, d)
+  }
+  override def toString: String = s"($x)^$d"
 }
