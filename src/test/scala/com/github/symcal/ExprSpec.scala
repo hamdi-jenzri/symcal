@@ -33,6 +33,18 @@ class ExprSpec extends FlatSpec with Matchers {
 
   behavior of "automatic simplify"
 
+  it should "run test example from README" in {
+    val x = Var('x)
+    val y = Var('y)
+    val z = Var('z)
+
+    val s = (x + y)*2*z
+    s.subs(x -> 3).toString shouldEqual "(3 + y) * 2 * z"
+
+    val t = s.subs(z -> 3).diff(y)
+    t.toInt shouldEqual 6
+  }
+
   it should "simplify constants" in {
     (Const(0) + Const(1) + Const(0) + Const(2)).simplify shouldEqual Const(3)
     ((Const(0) * Const(3) + Const(2) * Const(2)) * Const(2)).simplify shouldEqual Const(8)
