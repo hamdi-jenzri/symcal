@@ -1,5 +1,6 @@
 package com.github
 
+import scala.language.implicitConversions
 
 package object symcal {
   implicit class IntOps(x: Int) {

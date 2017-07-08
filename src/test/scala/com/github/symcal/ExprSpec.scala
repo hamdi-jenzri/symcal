@@ -31,7 +31,9 @@ class ExprSpec extends FlatSpec with Matchers {
     (z + y).toString shouldEqual "z + 1 + 1"
   }
 
-  it should "compute derivative" in {
+  behavior of "derivative"
+
+  it should "for Plus" in {
     val x = Var('x)
     val y = Var('y)
     val z = Const(1)
@@ -39,7 +41,7 @@ class ExprSpec extends FlatSpec with Matchers {
     (x + y + x + z).diff(x).simplify shouldEqual Const(2)
   }
 
-  it should "compute diff of a product" in {
+  it should "for Product" in {
     val x = Var('x)
     val y = Var('y)
     val z = Const(1)
@@ -51,11 +53,12 @@ class ExprSpec extends FlatSpec with Matchers {
     (z * u).simplify shouldEqual u
   }
 
-  it should "compute diff of power" in {
+  it should "for IntPow" in {
     val x = Var('x)
     val y = Var('y)
     val z = Const(1)
-    (x#^4).diff(x).simplify shouldEqual 4 * x#^3
-    (Const(3)#^2).toInt shouldEqual 9
+    (x #^ 4).diff(x).simplify shouldEqual 4 * x #^ 3
+    (Const(3) #^ 2).toInt shouldEqual 9
+  }
   }
 }

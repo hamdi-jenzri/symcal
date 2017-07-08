@@ -1,5 +1,7 @@
 package com.github.symcal
 
+import scala.language.implicitConversions
+
 trait Expr {
   def +(x: Expr): Expr = {
     Plus(this, x)
@@ -26,8 +28,8 @@ object Expr {
   }
 }
 
-case class Const(x: Int) extends Expr {
-  override def toInt: Int = x
+case class Const(value: Int) extends Expr {
+  override def toInt: Int = value
 
   def diff(x: Var): Expr = Const(0)
 
