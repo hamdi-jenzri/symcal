@@ -1,0 +1,18 @@
+language: scala
+
+scala:
+  - 2.11.11
+  - 2.12.2
+jdk:
+  - oraclejdk8
+
+# This will download the latest Oracle JDK. Without it, the JDK will be older.
+
+#addons:
+#  apt:
+#    packages:
+#      - oracle-java8-installer
+#      - oracle-java8-set-default
+
+script:
+  - sbt doc test package package-doc
