@@ -19,6 +19,8 @@ trait Expr {
 
   def simplify: Expr = this
 
+  def subs(subExpr: (Var, Expr)): Expr
+
   override def toString: String
 }
 
@@ -33,7 +35,9 @@ case class Const(value: Int) extends Expr {
 
   def diff(x: Var): Expr = Const(0)
 
-  override def toString: String = x.toString
+  override def subs(subExpr: (Var, Expr)): Expr = this
+
+  override def toString: String = value.toString
 }
 
 case class Plus(x: Expr, y: Expr) extends Expr {
@@ -47,6 +51,9 @@ case class Plus(x: Expr, y: Expr) extends Expr {
     case (Const(a), Const(b)) => Const(a + b)
     case (xs, ys) => xs + ys
   }
+
+  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) + y.subs(subExpr)).simplify
+
   override def toString: String = x.toString + " + " + y.toString
 }
 
@@ -63,6 +70,9 @@ case class Product(x: Expr, y: Expr) extends Expr {
     case (Const(a), Const(b)) => Const(a * b)
     case (xs, ys) => xs * ys
   }
+
+  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) * y.subs(subExpr)).simplify
+
   override def toString: String = s"($x) * ($y)"
 }
 
@@ -71,6 +81,11 @@ case class Var(name: Symbol) extends Expr {
     throw new Exception(s"Cannot evaluate toInt for an expression containing a variable ${name.name}.")
 
   def diff(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
+
+  override def subs(subExpr: (Var, Expr)): Expr = subExpr match {
+    case (Var(`name`), expr) ⇒ expr
+    case _ ⇒ this
+  }
 
   override def toString: String = name.name
 }
@@ -84,10 +99,15 @@ case class IntPow(x: Expr, d: Int) extends Expr {
     case _ => d * x.diff(z) * IntPow(x, d - 1)
   }
 
-  override def simplify: Expr = x.simplify match {
-    case Const(1) => Const(1)
-    case Const(0) if d >= 0 => Const(0)
-    case xs => IntPow(xs, d)
+  override def simplify: Expr = (x.simplify, d) match {
+    case (Const(1), _) => Const(1)
+    case (Const(0), _) if d >= 0 => Const(0)
+    case (xs, 1) => xs
+    case (_, 0) => Const(1)
+    case (xs, _) ⇒ IntPow(xs, d)
   }
+
+  override def subs(subExpr: (Var, Expr)): Expr = IntPow(x.subs(subExpr), d).simplify
+
   override def toString: String = s"($x)^$d"
 }

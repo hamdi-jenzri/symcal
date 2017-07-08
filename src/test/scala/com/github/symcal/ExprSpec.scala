@@ -59,6 +59,24 @@ class ExprSpec extends FlatSpec with Matchers {
     val z = Const(1)
     (x #^ 4).diff(x).simplify shouldEqual 4 * x #^ 3
     (Const(3) #^ 2).toInt shouldEqual 9
+    (z #^ 3).simplify shouldEqual Const(1)
+    (Const(3) #^ 1).simplify shouldEqual Const(3)
+    (Const(3) #^ 0).simplify shouldEqual Const(1)
+    (Const(0) #^ 0).simplify shouldEqual Const(0)
   }
+
+  behavior of "substitution"
+
+  it should "evaluate simple expressions" in {
+    val x: Var = 'x
+    // Here, x and 'x are the same variable and should be both substituted at once.
+    ((x + 1) * ('x + 2)).subs(x → 3).toInt shouldEqual 20
+
+    val y: Var = 'y
+    val ex1 = ('x + 1) * (2 * x + y)
+    val ex2 = ex1.subs(x → 3)
+    val ex3 = ex2.subs(y → 4)
+    ex2 shouldEqual 4 * (6 + y)
+    ex3 shouldEqual Const(40)
   }
 }
