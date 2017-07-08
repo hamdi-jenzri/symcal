@@ -31,14 +31,20 @@ class ExprSpec extends FlatSpec with Matchers {
     (z + y).toString shouldEqual "z + 1 + 1"
   }
 
+  behavior of "automatic simplify"
+
+  it should "simplify constants" in {
+    (Const(0) + Const(1) + Const(0) + Const(2)).simplify shouldEqual Const(3)
+    ((Const(0)*Const(3) + Const(2)*Const(2))*Const(2)).simplify shouldEqual Const(8)
+  }
+
   behavior of "derivative"
 
   it should "for Plus" in {
     val x = Var('x)
     val y = Var('y)
     val z = Const(1)
-    (x + y + x + z).diff(x) shouldEqual Const(1) + Const(0) + Const(1) + Const(0)
-    (x + y + x + z).diff(x).simplify shouldEqual Const(2)
+    (x + y + x + z).diff(x) shouldEqual Const(2)
   }
 
   it should "for Product" in {
@@ -46,9 +52,9 @@ class ExprSpec extends FlatSpec with Matchers {
     val y = Var('y)
     val z = Const(1)
     val u = Const(3)
-    (x * (y + z)).diff(x).simplify shouldEqual y + z
-    (x * (y + z)).diff(y).simplify shouldEqual x
-    (x * y * x).diff(x).simplify shouldEqual y * x + x * y
+    (x * (y + z)).diff(x) shouldEqual y + z
+    (x * (y + z)).diff(y) shouldEqual x
+    (x * y * x).diff(x) shouldEqual y * x + x * y
     (z * u).toInt shouldEqual 3
     (z * u).simplify shouldEqual u
   }
@@ -57,12 +63,14 @@ class ExprSpec extends FlatSpec with Matchers {
     val x = Var('x)
     val y = Var('y)
     val z = Const(1)
-    (x #^ 4).diff(x).simplify shouldEqual 4 * x #^ 3
+    (x #^ 4).diff(x) shouldEqual 4 * x #^ 3
+    (Const(3) #^ 2).simplify shouldEqual Const(9)
     (Const(3) #^ 2).toInt shouldEqual 9
     (z #^ 3).simplify shouldEqual Const(1)
     (Const(3) #^ 1).simplify shouldEqual Const(3)
     (Const(3) #^ 0).simplify shouldEqual Const(1)
-    (Const(0) #^ 0).simplify shouldEqual Const(0)
+    (Const(0) #^ 0).simplify shouldEqual Const(1)
+    (Const(0) #^ 3).simplify shouldEqual Const(0)
   }
 
   behavior of "substitution"

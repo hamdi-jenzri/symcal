@@ -11,6 +11,7 @@ trait Expr {
     Product(this, x)
   }
 
+  // The '#' character is needed for precedence
   def #^(d: Int): Expr = IntPow(this, d)
 
   def toInt: Int
@@ -43,7 +44,7 @@ case class Const(value: Int) extends Expr {
 case class Plus(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt + y.toInt
 
-  def diff(z: Var): Expr = x.diff(z) + y.diff(z)
+  def diff(z: Var): Expr = (x.diff(z) + y.diff(z)).simplify
 
   override def simplify: Expr = (x.simplify, y.simplify) match {
     case (Const(0), ys) => ys
@@ -60,7 +61,7 @@ case class Plus(x: Expr, y: Expr) extends Expr {
 case class Product(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt * y.toInt
 
-  override def diff(z: Var): Expr = Product(x.diff(z), y) + Product(x, y.diff(z))
+  override def diff(z: Var): Expr = (Product(x.diff(z), y) + Product(x, y.diff(z))).simplify
 
   override def simplify: Expr = (x.simplify, y.simplify) match {
     case (Const(1), ys) => ys
@@ -93,15 +94,14 @@ case class Var(name: Symbol) extends Expr {
 case class IntPow(x: Expr, d: Int) extends Expr {
   override def toInt: Int = Math.pow(x.toInt, d).toInt
 
-  override def diff(z: Var): Expr = d match {
-    case 0 => 0
+  override def diff(z: Var): Expr = (d match {
+    case 0 => Const(0)
     case 1 => x.diff(z)
     case _ => d * x.diff(z) * IntPow(x, d - 1)
-  }
+  }).simplify
 
   override def simplify: Expr = (x.simplify, d) match {
-    case (Const(1), _) => Const(1)
-    case (Const(0), _) if d >= 0 => Const(0)
+    case (Const(a), _) => Const(IntPow(Const(a), d).toInt)
     case (xs, 1) => xs
     case (_, 0) => Const(1)
     case (xs, _) ⇒ IntPow(xs, d)
