@@ -36,6 +36,8 @@ class ExprSpec extends FlatSpec with Matchers {
   it should "simplify constants" in {
     (Const(0) + Const(1) + Const(0) + Const(2)).simplify shouldEqual Const(3)
     ((Const(0)*Const(3) + Const(2)*Const(2))*Const(2)).simplify shouldEqual Const(8)
+    (0 + 'x + 1).simplify shouldEqual 'x + 1
+    (1 + 0 + 'x + 1).simplify shouldEqual 1 + 'x + 1
   }
 
   behavior of "derivative"
