@@ -35,7 +35,7 @@ class ExprSpec extends FlatSpec with Matchers {
 
   it should "simplify constants" in {
     (Const(0) + Const(1) + Const(0) + Const(2)).simplify shouldEqual Const(3)
-    ((Const(0)*Const(3) + Const(2)*Const(2))*Const(2)).simplify shouldEqual Const(8)
+    ((Const(0) * Const(3) + Const(2) * Const(2)) * Const(2)).simplify shouldEqual Const(8)
     (0 + 'x + 1).simplify shouldEqual 'x + 1
     (1 + 0 + 'x + 1).simplify shouldEqual 1 + 'x + 1
   }
@@ -88,5 +88,33 @@ class ExprSpec extends FlatSpec with Matchers {
     val ex3 = ex2.subs(y → 4)
     ex2 shouldEqual 4 * (6 + y)
     ex3 shouldEqual Const(40)
+  }
+
+  behavior of "toString"
+
+  it should "produce correct parentheses for simple expressions" in {
+    ('x + 1).toString shouldEqual "x + 1"
+    ('x + 'y).toString shouldEqual "x + y"
+    ('x + 'y + 'z).toString shouldEqual "x + y + z"
+    ('x * 2).toString shouldEqual "x * 2"
+    (Const(2) * 'x).toString shouldEqual "2 * x"
+    ('x * 'y).toString shouldEqual "x * y"
+    ('x * 'y * 2).toString shouldEqual "x * y * 2"
+  }
+
+  it should "produce correct parentheses for compound expressions" in {
+    (('x + 1) * 2).toString shouldEqual "(x + 1) * 2"
+    ('y * ('x + 1) * 2).toString shouldEqual "y * (x + 1) * 2"
+    (('x + 1) * ('x + 2) * ('x + 3)).toString shouldEqual "(x + 1) * (x + 2) * (x + 3)"
+  }
+
+  it should "produce correct parentheses for IntPow" in {
+    ('x #^ 2).toString shouldEqual "x^2"
+    (Const(3) #^ 2).toString shouldEqual "3^2"
+    ('x #^ 2 + 1).toString shouldEqual "x^2 + 1"
+    ('x #^ 2 * 'x).toString shouldEqual "x^2 * x"
+    (('x + 1) #^ 2).toString shouldEqual "(x + 1)^2"
+    (('x * ('y + 1) + 2) #^ 2).toString shouldEqual "(x * (y + 1) + 2)^2"
+    (('x #^ 3) #^ 2).toString shouldEqual "(x^3)^2"
   }
 }
