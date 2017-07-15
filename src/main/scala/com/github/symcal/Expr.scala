@@ -3,9 +3,13 @@ package com.github.symcal
 import scala.language.implicitConversions
 
 trait Expr {
-  def +(x: Expr): Expr = Plus(this, x)
+  def +(x: Expr): Expr = Add(this, x)
 
-  def *(x: Expr): Expr = Product(this, x)
+  def -(x: Expr): Expr = Subtract(this, x)
+
+  def unary_- : Expr = Minus(this)
+
+  def *(x: Expr): Expr = Multiply(this, x)
 
   // The '#' character is needed for precedence
   def #^(d: Int): Expr = IntPow(this, d)
@@ -36,10 +40,12 @@ object Expr {
     Const(x)
   }
 
+  final val precedenceOfAdd = 20
+  final val precedenceOfSubtract = 30
+  final val precedenceOfMinus = 40
+  final val precedenceOfMultiply = 50
+  final val precedenceOfIntPow = 60
   final val precedenceOfConst = 100
-  final val precedenceOfPlus = 20
-  final val precedenceOfProduct = 40
-  final val precedenceOfIntPow = 50
 }
 
 case class Const(value: Int) extends Expr {
@@ -54,7 +60,46 @@ case class Const(value: Int) extends Expr {
   override def toStringInternal: String = value.toString
 }
 
-case class Plus(x: Expr, y: Expr) extends Expr {
+case class Subtract(x: Expr, y: Expr) extends Expr {
+  override def toInt: Int = x.toInt - y.toInt
+
+  override def diff(z: Var): Expr = (x.diff(z) - y.diff(z)).simplify
+
+  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) - y.subs(subExpr)).simplify
+
+  override def precedenceLevel: Int = Expr.precedenceOfSubtract
+
+  override def simplify: Expr = (x.simplify, y.simplify) match {
+    case (Const(0), ys) ⇒ Minus(ys).simplify
+    case (xs, Const(0)) ⇒ xs
+    case (Const(a), Const(b)) ⇒ Const(a - b)
+    case (xs, ys) ⇒ xs - ys
+  }
+
+  override protected def toStringInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
+}
+
+case class Minus(x: Expr) extends Expr {
+  override def toInt: Int = -x.toInt
+
+  override def diff(z: Var): Expr = (-x.diff(z)).simplify
+
+  override def subs(subExpr: (Var, Expr)): Expr = (-x.subs(subExpr)).simplify
+
+  override def precedenceLevel: Int = Expr.precedenceOfMinus
+
+  override protected def toStringInternal: String = "-" + x.stringForm(precedenceLevel)
+
+  override def simplify: Expr = x.simplify match {
+    case Const(a) ⇒ Const(-a)
+    case Minus(a) ⇒ a
+    case xs => Minus(xs)
+  }
+}
+
+//case class FlatSum(xs: IndexedSeq[Expr])
+
+case class Add(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt + y.toInt
 
   def diff(z: Var): Expr = (x.diff(z) + y.diff(z)).simplify
@@ -70,13 +115,13 @@ case class Plus(x: Expr, y: Expr) extends Expr {
 
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
 
-  override def precedenceLevel: Int = Expr.precedenceOfPlus
+  override def precedenceLevel: Int = Expr.precedenceOfAdd
 }
 
-case class Product(x: Expr, y: Expr) extends Expr {
+case class Multiply(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt * y.toInt
 
-  override def diff(z: Var): Expr = (Product(x.diff(z), y) + Product(x, y.diff(z))).simplify
+  override def diff(z: Var): Expr = (Multiply(x.diff(z), y) + Multiply(x, y.diff(z))).simplify
 
   override def simplify: Expr = (x.simplify, y.simplify) match {
     case (Const(1), ys) => ys
@@ -91,7 +136,7 @@ case class Product(x: Expr, y: Expr) extends Expr {
 
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
 
-  override def precedenceLevel: Int = Expr.precedenceOfProduct
+  override def precedenceLevel: Int = Expr.precedenceOfMultiply
 }
 
 case class Var(name: Symbol) extends Expr {

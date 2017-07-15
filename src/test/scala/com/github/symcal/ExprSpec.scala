@@ -129,4 +129,28 @@ class ExprSpec extends FlatSpec with Matchers {
     (('x * ('y + 1) + 2) #^ 2).toString shouldEqual "(x * (y + 1) + 2)^2"
     (('x #^ 3) #^ 2).toString shouldEqual "(x^3)^2"
   }
+
+  behavior of "subtract and minus"
+
+  it should "produce correct parentheses" in {
+    (-Const(1)).toString shouldEqual "-1"
+    ('x - 1).toString shouldEqual "x - 1"
+    (-'x).toString shouldEqual "-x"
+    (-('x+1)).toString shouldEqual "-(x + 1)"
+    (-('x-1)).toString shouldEqual "-(x - 1)"
+    (-(-'x-1)).toString shouldEqual "-(-x - 1)"
+    ('x*(-'y)).toString shouldEqual "x * (-y)"
+    ('x*('z-'y)).toString shouldEqual "x * (z - y)"
+    ('x-('z+'y)).toString shouldEqual "x - (z + y)"
+    ('x+('z-'y)).toString shouldEqual "x + z - y"
+    ('x-('z-'y)).toString shouldEqual "x - (z - y)"
+    (('x+'z)-'y).toString shouldEqual "x + z - y"
+    (-('x+'z)-'y).toString shouldEqual "-(x + z) - y"
+  }
+
+  it should "simplify constants" in {
+    (Const(1) - 2 + 3).simplify shouldEqual Const(2)
+    (-('x - 1)).subs(Var('x) → 0).toInt shouldEqual 1
+    (-('x - 1)).diff('x).toInt shouldEqual -1
+  }
 }
