@@ -20,7 +20,7 @@ trait Expr {
 
   def simplify: Expr = this
 
-  def subs(subExpr: (Var, Expr)): Expr
+  def subs(v: Var, e: Expr): Expr
 
   final private[symcal] def stringForm(level: Int): String =
     if (precedenceLevel < level)
@@ -36,6 +36,8 @@ trait Expr {
 }
 
 object Expr {
+  /** If this implicit conversion is moved to `package.scala`, the expression 4 + Var('x) does not compile.
+    */
   implicit def intToConst(x: Int): Const = {
     Const(x)
   }
@@ -53,7 +55,7 @@ case class Const(value: Int) extends Expr {
 
   def diff(x: Var): Expr = Const(0)
 
-  override def subs(subExpr: (Var, Expr)): Expr = this
+  override def subs(v: Var, e: Expr): Expr = this
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
@@ -65,7 +67,7 @@ case class Subtract(x: Expr, y: Expr) extends Expr {
 
   override def diff(z: Var): Expr = (x.diff(z) - y.diff(z)).simplify
 
-  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) - y.subs(subExpr)).simplify
+  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) - y.subs(v, e)).simplify
 
   override def precedenceLevel: Int = Expr.precedenceOfSubtract
 
@@ -84,7 +86,7 @@ case class Minus(x: Expr) extends Expr {
 
   override def diff(z: Var): Expr = (-x.diff(z)).simplify
 
-  override def subs(subExpr: (Var, Expr)): Expr = (-x.subs(subExpr)).simplify
+  override def subs(v: Var, e: Expr): Expr = (-x.subs(v, e)).simplify
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
@@ -111,7 +113,7 @@ case class Add(x: Expr, y: Expr) extends Expr {
     case (xs, ys) => xs + ys
   }
 
-  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) + y.subs(subExpr)).simplify
+  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) + y.subs(v, e)).simplify
 
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
 
@@ -132,7 +134,7 @@ case class Multiply(x: Expr, y: Expr) extends Expr {
     case (xs, ys) => xs * ys
   }
 
-  override def subs(subExpr: (Var, Expr)): Expr = (x.subs(subExpr) * y.subs(subExpr)).simplify
+  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) * y.subs(v, e)).simplify
 
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
 
@@ -145,8 +147,8 @@ case class Var(name: Symbol) extends Expr {
 
   def diff(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
 
-  override def subs(subExpr: (Var, Expr)): Expr = subExpr match {
-    case (Var(`name`), expr) ⇒ expr
+  override def subs(v: Var, e: Expr): Expr = v match {
+    case Var(`name`) ⇒ e
     case _ ⇒ this
   }
 
@@ -171,7 +173,7 @@ case class IntPow(x: Expr, d: Const) extends Expr {
     case (xs, _) ⇒ IntPow(xs, d)
   }
 
-  override def subs(subExpr: (Var, Expr)): Expr = IntPow(x.subs(subExpr), d).simplify
+  override def subs(v: Var, e: Expr): Expr = IntPow(x.subs(v, e), d).simplify
 
   override def toStringInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.toString
 

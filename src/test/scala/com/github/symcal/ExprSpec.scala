@@ -38,10 +38,10 @@ class ExprSpec extends FlatSpec with Matchers {
     val y = Var('y)
     val z = Var('z)
 
-    val s = (x + y)*2*z
-    s.subs(x -> 3).toString shouldEqual "(3 + y) * 2 * z"
+    val s = (x + y) * 2 * z
+    s.subs(x, 3).toString shouldEqual "(3 + y) * 2 * z"
 
-    val t = s.subs(z -> 3).diff(y)
+    val t = s.subs(z, 3).diff(y)
     t.toInt shouldEqual 6
   }
 
@@ -92,12 +92,12 @@ class ExprSpec extends FlatSpec with Matchers {
   it should "evaluate simple expressions" in {
     val x: Var = 'x
     // Here, x and 'x are the same variable and should be both substituted at once.
-    ((x + 1) * ('x + 2)).subs(x → 3).toInt shouldEqual 20
+    ((x + 1) * ('x + 2)).subs(x, 3).toInt shouldEqual 20
 
     val y: Var = 'y
     val ex1 = ('x + 1) * (2 * x + y)
-    val ex2 = ex1.subs(x → 3)
-    val ex3 = ex2.subs(y → 4)
+    val ex2 = ex1.subs(x, 3)
+    val ex3 = ex2.subs(y, 4)
     ex2 shouldEqual 4 * (6 + y)
     ex3 shouldEqual Const(40)
   }
@@ -136,21 +136,34 @@ class ExprSpec extends FlatSpec with Matchers {
     (-Const(1)).toString shouldEqual "-1"
     ('x - 1).toString shouldEqual "x - 1"
     (-'x).toString shouldEqual "-x"
-    (-('x+1)).toString shouldEqual "-(x + 1)"
-    (-('x-1)).toString shouldEqual "-(x - 1)"
-    (-(-'x-1)).toString shouldEqual "-(-x - 1)"
-    ('x*(-'y)).toString shouldEqual "x * (-y)"
-    ('x*('z-'y)).toString shouldEqual "x * (z - y)"
-    ('x-('z+'y)).toString shouldEqual "x - (z + y)"
-    ('x+('z-'y)).toString shouldEqual "x + z - y"
-    ('x-('z-'y)).toString shouldEqual "x - (z - y)"
-    (('x+'z)-'y).toString shouldEqual "x + z - y"
-    (-('x+'z)-'y).toString shouldEqual "-(x + z) - y"
+    (-('x + 1)).toString shouldEqual "-(x + 1)"
+    (-('x - 1)).toString shouldEqual "-(x - 1)"
+    (-(-'x - 1)).toString shouldEqual "-(-x - 1)"
+    ('x * (-'y)).toString shouldEqual "x * (-y)"
+    ('x * ('z - 'y)).toString shouldEqual "x * (z - y)"
+    ('x - ('z + 'y)).toString shouldEqual "x - (z + y)"
+    ('x + ('z - 'y)).toString shouldEqual "x + z - y"
+    ('x - ('z - 'y)).toString shouldEqual "x - (z - y)"
+    (('x + 'z) - 'y).toString shouldEqual "x + z - y"
+    (-('x + 'z) - 'y).toString shouldEqual "-(x + z) - y"
   }
 
   it should "simplify constants" in {
     (Const(1) - 2 + 3).simplify shouldEqual Const(2)
-    (-('x - 1)).subs(Var('x) → 0).toInt shouldEqual 1
+    (-Const(1) - 2 + 3).simplify shouldEqual Const(0)
+    (-('x - 1)).subs(Var('x), 0).toInt shouldEqual 1
     (-('x - 1)).diff('x).toInt shouldEqual -1
+    (-(-'x)).simplify shouldEqual ('x: Expr)
   }
+
+  it should "do everything" in {
+    val x = Var('x)
+    val y = Var('y)
+    val p = x * x - y * y + 10 * x + 20000
+    p.diff('x) shouldEqual x + x + 10
+    val q = p.subs(y, (x + 1))
+    q shouldEqual x * x - (x + 1) * (x + 1) + 10 * x + 20000
+    q.subs('x, 2).toInt shouldEqual 20015
+  }
+
 }
