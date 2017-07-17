@@ -166,4 +166,21 @@ class ExprSpec extends FlatSpec with Matchers {
     q.subs('x, 2).toInt shouldEqual 20015
   }
 
+  behavior of "freeVars"
+
+  it should "compute empty set for an expression with no variables" in {
+    val x = Const(1)
+    Expr.freeVars(x) shouldEqual Set[Var]()
+  }
+
+  it should "compute a set of vars" in {
+    var x = Var('x)
+    var y = Var('y)
+
+    val p = x*y - 1
+    Expr.freeVars(p) shouldEqual Set(x, y)
+    val q = x #^ 2
+    q.freeVars shouldEqual Set(x)
+  }
+
 }

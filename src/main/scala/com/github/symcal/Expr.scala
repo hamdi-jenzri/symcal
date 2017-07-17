@@ -2,7 +2,7 @@ package com.github.symcal
 
 import scala.language.implicitConversions
 
-trait Expr {
+sealed trait Expr {
   def +(x: Expr): Expr = Add(this, x)
 
   def -(x: Expr): Expr = Subtract(this, x)
@@ -33,6 +33,8 @@ trait Expr {
   protected def toStringInternal: String
 
   override final def toString: String = stringForm(0)
+
+  def freeVars: Set[Var] = Expr.freeVars(this)
 }
 
 object Expr {
@@ -48,6 +50,16 @@ object Expr {
   final val precedenceOfMultiply = 50
   final val precedenceOfIntPow = 60
   final val precedenceOfConst = 100
+
+  def freeVars(e: Expr): Set[Var] = e match {
+    case Const(value) ⇒ Set()
+    case Subtract(x, y) ⇒ freeVars(x) ++ freeVars(y)
+    case Minus(x) ⇒ freeVars(x)
+    case Add(x, y) ⇒ freeVars(x) ++ freeVars(y)
+    case Multiply(x, y) ⇒ freeVars(x) ++ freeVars(y)
+    case Var(name) ⇒ Set(Var(name))
+    case IntPow(x, d) ⇒ freeVars(x)
+  }
 }
 
 case class Const(value: Int) extends Expr {
