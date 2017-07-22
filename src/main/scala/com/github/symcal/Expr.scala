@@ -205,11 +205,11 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 }
 
 final case class Sum(es: Expr*) extends Expr {
-  override def toInt: Int = ???
+  override def toInt: Int = es.map(_.toInt).sum
 
   private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
 
-  override def subs(v: Var, e: Expr): Expr = ???
+  override def subs(v: Var, e: Expr): Expr = Sum(es.map(_.subs(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
@@ -237,15 +237,34 @@ final case class Sum(es: Expr*) extends Expr {
 }
 
 final case class Product(es: Expr*) extends Expr {
-  override def toInt: Int = ???
+  override def toInt: Int = es.map(_.toInt).product
 
   override def diffInternal(x: Var): Expr = ???
 
-  override def subs(v: Var, e: Expr): Expr = ???
+  override def subs(v: Var, e: Expr): Expr = Product(es.map(_.subs(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
   override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
 
-  override def simplify: Expr = ???
+  override def simplify: Expr = {
+    val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
+    // mergedConstants is always non-empty but can be Const(0) or Const(1)
+    val mergedConstants = const.foldLeft[Expr](Const(1))((x, y) ⇒ (x * y).simplify)
+    val mergedExprs =
+      mergedConstants match {
+        case Const(0) ⇒ Seq(Const(0))
+        case Const(1) ⇒ nonconst
+        case _ ⇒ nonconst :+ mergedConstants
+      }
+    // There are three cases now: empty sequence, one expr, and more than one expr.
+    mergedExprs.headOption match {
+      case Some(e) ⇒
+        if (mergedExprs.length == 1) {
+          // In this case, the simplified result is not a `Sum`.
+          e
+        } else Sum(mergedExprs: _*)
+      case None ⇒ Const(0) // Empty sequence is transformed into `Const(0)`.
+    }
+  }
 }

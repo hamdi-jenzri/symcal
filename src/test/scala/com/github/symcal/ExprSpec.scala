@@ -221,6 +221,18 @@ class ExprSpec extends FlatSpec with Matchers {
     Sum('x, 1, 2, 'x, 0, 'x, 0, 0, 3).simplify shouldEqual Sum('x, 'x, 'x, 6)
   }
 
+  it should "convert to int" in {
+    Sum(0, 1, 2, 0, 0, 0, 3).toInt shouldEqual 6
+
+    the[Exception] thrownBy {
+      Sum(0, 1, 2, 0, 'z, 0, 'x, 3).toInt shouldEqual 6
+    } should have message "Cannot evaluate toInt for an expression containing a variable z."
+  }
+
+  it should "substitute everywhere" in {
+    Sum('x, 1, 'x, 2).subs('x, 'z) shouldEqual Sum('z, 1, 'z, 2)
+  }
+
   behavior of "Product"
 
   it should "print all multiplicands" in {
