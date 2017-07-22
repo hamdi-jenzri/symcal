@@ -231,7 +231,7 @@ final case class Sum(es: Expr*) extends Expr {
           // In this case, the simplified result is not a `Sum`.
           e
         } else Sum(mergedExprs: _*)
-      case None ⇒ Const(0) // Empty sequence is transformed into `Const(0)`.
+      case None ⇒ Const(0) // Empty sum is transformed into `Const(0)`.
     }
   }
 }
@@ -263,8 +263,8 @@ final case class Product(es: Expr*) extends Expr {
         if (mergedExprs.length == 1) {
           // In this case, the simplified result is not a `Sum`.
           e
-        } else Sum(mergedExprs: _*)
-      case None ⇒ Const(0) // Empty sequence is transformed into `Const(0)`.
+        } else Product(mergedExprs: _*)
+      case None ⇒ Const(1) // Empty product is transformed into `Const(1)`.
     }
   }
 }

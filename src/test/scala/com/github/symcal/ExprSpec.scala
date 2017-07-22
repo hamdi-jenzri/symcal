@@ -248,4 +248,35 @@ class ExprSpec extends FlatSpec with Matchers {
     val t = 'x * z
     t.toString shouldEqual "x * 1 * (x + z) * (x + 3) * z * y"
   }
+
+  it should "simplify constants correctly" in {
+    // empty sum
+    Product().simplify shouldEqual Const(1)
+    // just one zero
+    Product(0).simplify shouldEqual Const(0)
+    Product(1).simplify shouldEqual Const(1)
+    // only constants yield a Const
+    Product(0, 1, 2, 0, 0, 0, 3).simplify shouldEqual Const(0)
+    Product(1, 1, 2, 1, 1, 1, 3).simplify shouldEqual Const(6)
+
+    // only non-constants
+    Product('x, 'y, -'x, 'y).simplify shouldEqual Product('x, 'y, -'x, 'y)
+
+    // both constants and non-constants
+    Product('x, 1, 2, 'x, 0, 'x, 1, 1, 3).simplify shouldEqual Const(0)
+    Product('x, 1, 2, 'x, 1, 'x, 1, 1, 3).simplify shouldEqual Product('x, 'x, 'x, 6)
+  }
+
+  it should "convert to int" in {
+    Product(1, 2, 1, 1, 1, 1, 3).toInt shouldEqual 6
+
+    the[Exception] thrownBy {
+      Product(0, 1, 2, 0, 'z, 0, 'x, 3).toInt shouldEqual 6
+    } should have message "Cannot evaluate toInt for an expression containing a variable z."
+  }
+
+  it should "substitute everywhere" in {
+    Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product('z, 1, 'z, 2)
+  }
+
 }
