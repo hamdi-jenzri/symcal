@@ -200,12 +200,27 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "compute derivative" in {
-    val s: Seq[Expr] = Seq(1, Sum('x * 'z *'x, 3 + 'x), 'y)
+    val s: Seq[Expr] = Seq(1, Sum('x * 'z * 'x, 3 + 'x), 'y)
     val z = Sum(s: _*)
     val z_diff_x = z.diff('x)
-    z_diff_x shouldEqual Sum('z * 'x , 'x * 'z , 1)
+    z_diff_x.toString shouldEqual "z * x + x * z + 1"
   }
-  
+
+  it should "simplify constants correctly" in {
+    // empty sum
+    Sum().simplify shouldEqual Const(0)
+    // just one zero
+    Sum(0).simplify shouldEqual Const(0)
+    // only constants yield a Const
+    Sum(0, 1, 2, 0, 0, 0, 3).simplify shouldEqual Const(6)
+
+    // only non-constants
+    Sum('x, 'y, -'x, 'y).simplify shouldEqual Sum('x, 'y, -'x, 'y)
+
+    // both constants and non-constants
+    Sum('x, 1, 2, 'x, 0, 'x, 0, 0, 3).simplify shouldEqual Sum('x, 'x, 'x, 6)
+  }
+
   behavior of "Product"
 
   it should "print all multiplicands" in {

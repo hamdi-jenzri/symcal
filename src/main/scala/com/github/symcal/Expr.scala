@@ -217,10 +217,21 @@ final case class Sum(es: Expr*) extends Expr {
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
-    val mergedConstants = const.reduce((x, y) ⇒ (x + y).simplify)
-    mergedConstants match {
-      case Const(0) ⇒ Sum(nonconst: _*)
-      case _ ⇒ Sum(nonconst :+ mergedConstants: _*)
+    // mergedConstants is always non-empty but can be Const(0)
+    val mergedConstants = const.foldLeft[Expr](Const(0))((x, y) ⇒ (x + y).simplify)
+    val mergedExprs =
+      mergedConstants match {
+        case Const(0) ⇒ nonconst
+        case _ ⇒ nonconst :+ mergedConstants
+      }
+    // There are three cases now: empty sequence, one expr, and more than one expr.
+    mergedExprs.headOption match {
+      case Some(e) ⇒
+        if (mergedExprs.length == 1) {
+          // In this case, the simplified result is not a `Sum`.
+          e
+        } else Sum(mergedExprs: _*)
+      case None ⇒ Const(0) // Empty sequence is transformed into `Const(0)`.
     }
   }
 }
