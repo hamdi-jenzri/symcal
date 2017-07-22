@@ -249,6 +249,10 @@ class ExprSpec extends FlatSpec with Matchers {
     t.toString shouldEqual "x * 1 * (x + z) * (x + 3) * z * y"
   }
 
+  it should "compute derivative" in {
+    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).toString shouldEqual "((z * x + x * z) * (3 + x) + x * z * x) * y"
+  }
+
   it should "simplify constants correctly" in {
     // empty sum
     Product().simplify shouldEqual Const(1)

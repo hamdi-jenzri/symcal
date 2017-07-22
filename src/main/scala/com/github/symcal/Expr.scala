@@ -239,7 +239,11 @@ final case class Sum(es: Expr*) extends Expr {
 final case class Product(es: Expr*) extends Expr {
   override def toInt: Int = es.map(_.toInt).product
 
-  override def diffInternal(x: Var): Expr = ???
+  override def diffInternal(x: Var): Expr = {
+    val diffs = es.map(_.diff(x))
+    val replaced = diffs.zipWithIndex.map{ case (expr, index) ⇒ Product(es.updated(index, expr): _*)}
+    Sum(replaced: _*)
+  }
 
   override def subs(v: Var, e: Expr): Expr = Product(es.map(_.subs(v, e)): _*)
 
