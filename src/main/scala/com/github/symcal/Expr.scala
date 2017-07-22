@@ -16,9 +16,11 @@ sealed trait Expr {
 
   def toInt: Int
 
-  def diff(x: Var): Expr
+  final def diff(x: Var): Expr = diffInternal(x).simplify
 
-  def simplify: Expr = this
+  private[symcal] def diffInternal(x: Var): Expr
+
+  def simplify: Expr
 
   def subs(v: Var, e: Expr): Expr
 
@@ -35,6 +37,8 @@ sealed trait Expr {
   override final def toString: String = stringForm(0)
 
   def freeVars: Set[Var] = Expr.freeVars(this)
+
+  def isConst: Boolean = false
 }
 
 object Expr {
@@ -59,25 +63,31 @@ object Expr {
     case Multiply(x, y) ⇒ freeVars(x) ++ freeVars(y)
     case Var(name) ⇒ Set(Var(name))
     case IntPow(x, d) ⇒ freeVars(x)
+    case Sum(es@_*) ⇒ es.flatMap(freeVars).toSet
+    case Product(es@_*) ⇒ es.flatMap(freeVars).toSet
   }
 }
 
-case class Const(value: Int) extends Expr {
+final case class Const(value: Int) extends Expr {
   override def toInt: Int = value
 
-  def diff(x: Var): Expr = Const(0)
+  private[symcal] def diffInternal(x: Var): Expr = Const(0)
 
   override def subs(v: Var, e: Expr): Expr = this
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
   override def toStringInternal: String = value.toString
+
+  override def simplify: Expr = this
+
+  override def isConst: Boolean = true
 }
 
-case class Subtract(x: Expr, y: Expr) extends Expr {
+final case class Subtract(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt - y.toInt
 
-  override def diff(z: Var): Expr = (x.diff(z) - y.diff(z)).simplify
+  private[symcal] def diffInternal(z: Var): Expr = x.diff(z) - y.diff(z)
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) - y.subs(v, e)).simplify
 
@@ -93,10 +103,10 @@ case class Subtract(x: Expr, y: Expr) extends Expr {
   override protected def toStringInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
 }
 
-case class Minus(x: Expr) extends Expr {
+final case class Minus(x: Expr) extends Expr {
   override def toInt: Int = -x.toInt
 
-  override def diff(z: Var): Expr = (-x.diff(z)).simplify
+  private[symcal] def diffInternal(z: Var): Expr = -x.diff(z)
 
   override def subs(v: Var, e: Expr): Expr = (-x.subs(v, e)).simplify
 
@@ -113,10 +123,10 @@ case class Minus(x: Expr) extends Expr {
 
 //case class FlatSum(xs: IndexedSeq[Expr])
 
-case class Add(x: Expr, y: Expr) extends Expr {
+final case class Add(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt + y.toInt
 
-  def diff(z: Var): Expr = (x.diff(z) + y.diff(z)).simplify
+  private[symcal] def diffInternal(z: Var): Expr = x.diff(z) + y.diff(z)
 
   override def simplify: Expr = (x.simplify, y.simplify) match {
     case (Const(0), ys) => ys
@@ -132,10 +142,10 @@ case class Add(x: Expr, y: Expr) extends Expr {
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 }
 
-case class Multiply(x: Expr, y: Expr) extends Expr {
+final case class Multiply(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt * y.toInt
 
-  override def diff(z: Var): Expr = (Multiply(x.diff(z), y) + Multiply(x, y.diff(z))).simplify
+  private[symcal] def diffInternal(z: Var): Expr = Multiply(x.diff(z), y) + Multiply(x, y.diff(z))
 
   override def simplify: Expr = (x.simplify, y.simplify) match {
     case (Const(1), ys) => ys
@@ -153,11 +163,11 @@ case class Multiply(x: Expr, y: Expr) extends Expr {
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 }
 
-case class Var(name: Symbol) extends Expr {
+final case class Var(name: Symbol) extends Expr {
   override def toInt: Int =
     throw new Exception(s"Cannot evaluate toInt for an expression containing a variable ${name.name}.")
 
-  def diff(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
+  private[symcal] def diffInternal(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
 
   override def subs(v: Var, e: Expr): Expr = v match {
     case Var(`name`) ⇒ e
@@ -167,16 +177,18 @@ case class Var(name: Symbol) extends Expr {
   override def toStringInternal: String = name.name
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
+
+  override def simplify: Expr = this
 }
 
-case class IntPow(x: Expr, d: Const) extends Expr {
+final case class IntPow(x: Expr, d: Const) extends Expr {
   override def toInt: Int = Math.pow(x.toInt, d.value).toInt
 
-  override def diff(z: Var): Expr = (d match {
+  private[symcal] def diffInternal(z: Var): Expr = d match {
     case Const(0) => Const(0)
-    case Const(1) => x.diff(z)
+    case Const(1) => x.diffInternal(z) // no need to `diff` here because `simplify` will follow
     case _ => d * x.diff(z) * IntPow(x, Const(d.value - 1))
-  }).simplify
+  }
 
   override def simplify: Expr = (x.simplify, d) match {
     case (Const(a), _) => Const(IntPow(Const(a), d).toInt)
@@ -190,4 +202,39 @@ case class IntPow(x: Expr, d: Const) extends Expr {
   override def toStringInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.toString
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
+}
+
+final case class Sum(es: Expr*) extends Expr {
+  override def toInt: Int = ???
+
+  private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
+
+  override def subs(v: Var, e: Expr): Expr = ???
+
+  override def precedenceLevel: Int = Expr.precedenceOfAdd
+
+  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" + ")
+
+  override def simplify: Expr = {
+    val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
+    val mergedConstants = const.reduce((x, y) ⇒ (x + y).simplify)
+    mergedConstants match {
+      case Const(0) ⇒ Sum(nonconst: _*)
+      case _ ⇒ Sum(nonconst :+ mergedConstants: _*)
+    }
+  }
+}
+
+final case class Product(es: Expr*) extends Expr {
+  override def toInt: Int = ???
+
+  override def diffInternal(x: Var): Expr = ???
+
+  override def subs(v: Var, e: Expr): Expr = ???
+
+  override def precedenceLevel: Int = Expr.precedenceOfMultiply
+
+  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
+
+  override def simplify: Expr = ???
 }

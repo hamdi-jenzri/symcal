@@ -161,7 +161,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val y = Var('y)
     val p = x * x - y * y + 10 * x + 20000
     p.diff('x) shouldEqual x + x + 10
-    val q = p.subs(y, (x + 1))
+    val q = p.subs(y, x + 1)
     q shouldEqual x * x - (x + 1) * (x + 1) + 10 * x + 20000
     q.subs('x, 2).toInt shouldEqual 20015
   }
@@ -177,10 +177,48 @@ class ExprSpec extends FlatSpec with Matchers {
     var x = Var('x)
     var y = Var('y)
 
-    val p = x*y - 1
+    val p = x * y - 1
     Expr.freeVars(p) shouldEqual Set(x, y)
     val q = x #^ 2
     q.freeVars shouldEqual Set(x)
   }
 
+  behavior of "Sum"
+
+  it should "print all summands" in {
+    val x = Sum(1, 2, 3)
+    x.toString shouldEqual "1 + 2 + 3"
+    val y1 = Sum(1, 'x * 'z, 'y)
+    y1.toString shouldEqual "1 + x * z + y"
+    val y = Sum(1, 'x + 'z, 'y)
+    y.toString shouldEqual "1 + x + z + y"
+    val s: Seq[Expr] = Seq(1, Sum('x + 'z, 'x + 3), 'y)
+    val z = Sum(s: _*)
+    z.toString shouldEqual "1 + x + z + x + 3 + y"
+    val t = 'x * z
+    t.toString shouldEqual "x * (1 + x + z + x + 3 + y)"
+  }
+
+  it should "compute derivative" in {
+    val s: Seq[Expr] = Seq(1, Sum('x * 'z *'x, 3 + 'x), 'y)
+    val z = Sum(s: _*)
+    val z_diff_x = z.diff('x)
+    z_diff_x shouldEqual Sum('z * 'x , 'x * 'z , 1)
+  }
+  
+  behavior of "Product"
+
+  it should "print all multiplicands" in {
+    val x = Product(1, 2, 3)
+    x.toString shouldEqual "1 * 2 * 3"
+    val y1 = Product(1, 'x + 'z, 'y)
+    y1.toString shouldEqual "1 * (x + z) * y"
+    val y = Product(1, 'x * 'z, 'y)
+    y.toString shouldEqual "1 * x * z * y"
+    val s: Seq[Expr] = Seq(1, Product('x + 'z, 'x + 3, 'z), 'y)
+    val z = Product(s: _*)
+    z.toString shouldEqual "1 * (x + z) * (x + 3) * z * y"
+    val t = 'x * z
+    t.toString shouldEqual "x * 1 * (x + z) * (x + 3) * z * y"
+  }
 }
