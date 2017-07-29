@@ -160,7 +160,7 @@ final case class Add(x: Expr, y: Expr) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  override def expand: Sum = Sum(x.expand, y.expand)
+  override def expand: Sum = Sum(x.expand.es ++ y.expand.es: _*)
 }
 
 final case class Multiply(x: Expr, y: Expr) extends Expr {

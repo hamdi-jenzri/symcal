@@ -204,8 +204,8 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "print minus correctly" in {
-    ('a + (- 'b)).print shouldEqual "a - b"
-    ('a - (- 'b)).print shouldEqual "a - (-b)"
+    ('a + (-'b)).print shouldEqual "a - b"
+    ('a - (-'b)).print shouldEqual "a - (-b)"
   }
 
   it should "compute derivative" in {
@@ -298,19 +298,20 @@ class ExprSpec extends FlatSpec with Matchers {
     Const(1).expand shouldEqual Sum(Const(1))
     ('x * 'y).expand.print shouldEqual "x * y"
     (-'x).expand shouldEqual Sum(Minus(Var('x)))
-    (-'x*'y).expand shouldEqual Sum(Minus(Var('x))*Var('y))
+    (-'x * 'y).expand shouldEqual Sum(Minus(Var('x)) * Var('y))
   }
 
   it should "expand sums" in {
+    ('a + 'b).expand shouldEqual Sum(Var('a), Var('b))
     ('a - ('a - 'b)).expand shouldEqual Sum(Var('a), -Var('a), Var('b))
     ('a - ('a - 'b)).expand.print shouldEqual "a - a + b"
-    ('a*'a + 'a *'b + 'b *'a + 'b * 'b).expand.print shouldEqual "a * a + a * b + b * a + b * b"
-    -('a + 'b).expand shouldEqual Sum(-'a, -'b)
-    -('a - 'b).expand shouldEqual Sum(-'a, 'b)
+    ('a * 'a + 'a * 'b + 'b * 'a + 'b * 'b).expand.print shouldEqual "a * a + a * b + b * a + b * b"
+    (-('a + 'b)).expand shouldEqual Sum(-'a, -'b)
+    (-('a - 'b)).expand shouldEqual Sum(-'a, 'b)
   }
 
   it should "expand products" in {
-    ('a+'b)*('a + 'b).expand shouldEqual ('a*'a + 'a *'b + 'b *'a + 'b * 'b).expand
+    (('a + 'b) * ('a + 'b)).expand shouldEqual ('a * 'a + 'a * 'b + 'b * 'a + 'b * 'b).expand
   }
 
 }
