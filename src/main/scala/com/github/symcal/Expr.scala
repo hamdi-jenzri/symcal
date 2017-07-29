@@ -1,6 +1,5 @@
 package com.github.symcal
 
-import scala.annotation.tailrec
 import scala.language.implicitConversions
 
 sealed trait Expr {
@@ -73,6 +72,56 @@ object Expr {
     case IntPow(x, d) ⇒ freeVars(x)
     case Sum(es@_*) ⇒ es.flatMap(freeVars).toSet
     case Product(es@_*) ⇒ es.flatMap(freeVars).toSet
+  }
+
+  /** Auxiliary function. Returns the sequence of coefficients and powers for multinomial expansion.
+    * For example, to compute the expansion `(x + y)^3` we call `getTermCoeffs(2, 3)`, which returns the sequence
+    * {{{
+    *   Seq(
+    *     (1, Seq(3, 0)),
+    *     (3, Seq(2, 1)),
+    *     (3, Seq(1, 2)),
+    *     (1, Seq(0, 3))
+    *   )
+    * }}}
+    * This allows us to build the expansion as `x^3 + 3*x^2*y + 3*x*y^2 + y^3`.
+    *
+    * @param len   Length of the sum list to be expanded.
+    * @param power Power of the expansion.
+    * @return Sequence of coefficients and power indices for individual subterms.
+    */
+  private[symcal] def getTermCoeffs(len: Int, power: Int): Seq[(Int, Seq[Int])] = {
+
+    /** Auxiliary function. Returns the sequence of combination numbers, together with the sequence of indices.
+      * For example, `getCombinationNumbers(4)` returns `Seq( (4, 1), (3, 4), (2, 6), (1, 4), (0, 1) )`
+      * which corresponds to the coefficients in the expansion `(x + 1) ^ 4 = x^4 + 4*x^3 + 6*x^2 + 4*x + 1`.
+      *
+      * @param total The number of elements.
+      * @return Sequence of pairs `(i, c)` where `i` goes from `total` to `0` and
+      *         `c` is equal to the number of combinations of `i` from `total`.
+      *         `c == total! / (i! * (total - i)! )`
+      */
+    def getCombinationNumbers(total: Int): Seq[(Int, Int)] = {
+      val ordering = total to 0 by -1
+      ordering zip ordering.scanLeft(1) { case (c, i) ⇒ c * i / (total - i + 1) }
+    }
+
+    def getTermCoeffsRec(m: Int, total: Int): Seq[(Int, List[Int])] = {
+      if (m <= 1 || total == 0) {
+        Seq((1, List.fill[Int](m)(total)))
+      } else {
+        val result: Seq[(Int, List[Int])] = for {
+          pC <- getCombinationNumbers(total)
+          (p, c) = pC
+          termCoeffs <- getTermCoeffsRec(m - 1, total - p)
+          (coeff, indices) = termCoeffs
+        } yield
+          (c * coeff, p :: indices)
+        result
+      }
+    }
+
+    getTermCoeffsRec(len, power)
   }
 }
 
@@ -237,36 +286,6 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
-  private[symcal] def getTermCoeffs(len: Int): Seq[(Int, Seq[Int])] = {
-    /** Returns the sequence of combination numbers, together with the sequence of indices.
-      *
-      * @param total The number of elements.
-      * @return Sequence of pairs `(i, c)` where `i` goes from `total` to `0` and
-      *         `c` is equal to the number of combinations of `i` from `total`.
-      *         `c == total! / (i! * (total - i)! )`
-      */
-    def getCombinationNumbers(total: Int): Seq[(Int, Int)] = {
-      val ordering = total to 0 by -1
-      ordering zip ordering.scanLeft(1) { case (c, i) ⇒ c * i / (total - i + 1) }
-    }
-
-    def getTermCoeffsRec(m: Int, total: Int): Seq[(Int, List[Int])] = {
-      if (m <= 1 || total == 0) {
-        Seq((1, List.fill[Int](m)(total)))
-      } else {
-        val res = for {
-          pC <- getCombinationNumbers(total)
-          (p, c) = pC
-          termCoeffs <- getTermCoeffsRec(m - 1, total - p)
-          (coeff, indices) = termCoeffs
-        } yield (c * coeff, p :: indices)
-        res
-      }
-    }
-
-    getTermCoeffsRec(len, d.toInt)
-  }
-
   override def expandInternal: Sum =
     if (d.toInt >= 0) {
       // We can expand only if the exponent is non-negative.
@@ -276,7 +295,7 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
         case (Some(head), tail) if tail.isEmpty ⇒ // If x.expand has only one term, we have nothing to expand.
           Sum(IntPow(head, d))
         case _ ⇒ // x.expand has at least 2 terms, need to expand
-          val newMonomials = getTermCoeffs(xs.length) map {
+          val newMonomials = Expr.getTermCoeffs(xs.length, d.toInt) map {
             case (coeff, powers) ⇒
               val newTerms = (xs zip powers).map { case (e, i) ⇒ IntPow(e, i) } :+ Const(coeff)
               Product(newTerms: _*)

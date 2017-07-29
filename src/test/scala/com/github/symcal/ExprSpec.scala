@@ -320,8 +320,8 @@ class ExprSpec extends FlatSpec with Matchers {
   behavior of "expand for power"
 
   it should "compute correct multinomial coefficients" in {
-    IntPow('x, 2).getTermCoeffs(2) shouldEqual Seq((1, Seq(2, 0)), (2, Seq(1, 1)), (1, Seq(0, 2)))
-    IntPow('x, 3).getTermCoeffs(2) shouldEqual Seq((1, Seq(3, 0)), (3, Seq(2, 1)), (3, Seq(1, 2)), (1, Seq(0, 3)))
+    Expr.getTermCoeffs(2, 2) shouldEqual Seq((1, Seq(2, 0)), (2, Seq(1, 1)), (1, Seq(0, 2)))
+    Expr.getTermCoeffs(2, 3) shouldEqual Seq((1, Seq(3, 0)), (3, Seq(2, 1)), (3, Seq(1, 2)), (1, Seq(0, 3)))
   }
 
   it should "expand powers" in {
