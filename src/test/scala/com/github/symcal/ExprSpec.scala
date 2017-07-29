@@ -315,4 +315,19 @@ class ExprSpec extends FlatSpec with Matchers {
     (('a + 1) * ('a + 1) * ('a + 1)).expand.print shouldEqual "a * a * a + a * a + a * a + a + a * a + a + a + 1"
   }
 
+  behavior of "expand for power"
+
+  it should "compute correct multinomial coefficients" in {
+    IntPow('x, 2).getTermCoeffs(2) shouldEqual Seq((1, Seq(2, 0)), (2, Seq(1, 1)), (1, Seq(0, 2)))
+    IntPow('x, 3).getTermCoeffs(2) shouldEqual Seq((1, Seq(3, 0)), (3, Seq(2, 1)), (3, Seq(1, 2)), (1, Seq(0, 3)))
+  }
+
+  it should "expand powers" in {
+    (('x + 'y) #^ 0).expand.print shouldEqual "1"
+    (('x + 'y) #^ 1).expand.print shouldEqual "x + y"
+    (('x + 'y) #^ 2).expand.print shouldEqual "x^2 + x * y * 2 + y^2"
+    (('x + 'y) #^ 3).expand.print shouldEqual "x^3 + x^2 * y * 3 + x * y^2 * 3 + y^3"
+    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + a^2 * b * 3 + a^2 * c * 3 + a * b^2 * 3 + a * b * c * 6 + a * c^2 * 3 + b^3 + b^2 * c * 3 + b * c^2 * 3 + c^3"
+    (('x + 'y + 2) #^ 5).expand.print shouldEqual "x^5 + x^4 * y * 5 + x^4 * 10 + x^3 * y^2 * 10 + x^3 * y * 40 + x^3 * 40 + x^2 * y^3 * 10 + x^2 * y^2 * 60 + x^2 * y * 120 + x^2 * 80 + x * y^4 * 5 + x * y^3 * 40 + x * y^2 * 120 + x * y * 160 + x * 80 + y^5 + y^4 * 10 + y^3 * 40 + y^2 * 80 + y * 80 + 32"
+  }
 }

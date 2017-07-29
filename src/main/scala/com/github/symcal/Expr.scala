@@ -4,19 +4,19 @@ import scala.annotation.tailrec
 import scala.language.implicitConversions
 
 sealed trait Expr {
-  def +(x: Expr): Expr = Add(this, x)
+  def +(x: Expr): Add = Add(this, x)
 
-  def -(x: Expr): Expr = Subtract(this, x)
+  def -(x: Expr): Subtract = Subtract(this, x)
 
   def unary_- : Expr = this match {
     case Minus(x) ⇒ x
     case y ⇒ Minus(y)
   }
 
-  def *(x: Expr): Expr = Multiply(this, x)
+  def *(x: Expr): Multiply = Multiply(this, x)
 
   // The '#' character is needed for precedence
-  def #^(d: Int): Expr = IntPow(this, d)
+  def #^(d: Int): IntPow = IntPow(this, d)
 
   def toInt: Int
 
@@ -237,7 +237,7 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
-  private[symcal] def getTermCoeffs(len: Int, pow: Int): Seq[(Int, Seq[Int])] = {
+  private[symcal] def getTermCoeffs(len: Int): Seq[(Int, Seq[Int])] = {
     def getCombinationNumbers(ordering: Seq[Int], total: Int): Seq[Int] = {
       ordering.scanLeft(1){ case (c, i) ⇒ c * i / (total - i + 1)}
     }
@@ -257,7 +257,7 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
       }
     }
 
-    getTermCoeffsRec(len, len)
+    getTermCoeffsRec(len, d.toInt)
   }
 
 
@@ -270,10 +270,10 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
         case (Some(head), tail) if tail.isEmpty ⇒ // If x.expand has only one term, we have nothing to expand.
           Sum(IntPow(head, d))
         case _ ⇒ // x.expand has at least 2 terms, need to expand
-          val terms = getTermCoeffs(xs.length, d.toInt) map {
+          val terms = getTermCoeffs(xs.length) map {
             case (coeff, powers) ⇒
-              val ms = (xs zip powers).map { case (e, i) ⇒ IntPow(e, i) }
-              Product(Seq(Const(coeff)) ++ ms: _*) // Put the constant in front.
+              val newTerms = (xs zip powers).map { case (e, i) ⇒ IntPow(e, i) } :+ Const(coeff)
+              Product(newTerms: _*)
           }
           Sum(terms: _*)
       }
