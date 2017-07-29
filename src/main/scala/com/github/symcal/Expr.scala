@@ -190,7 +190,7 @@ final case class Multiply(x: Expr, y: Expr) extends Expr {
     val terms = for {
       xx <- x.expandInternal.es
       yy <- y.expandInternal.es
-    } yield xx * yy
+    } yield Product(xx, yy).flatten
     Sum(terms: _*)
   }
 }
@@ -238,17 +238,24 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
   private[symcal] def getTermCoeffs(len: Int): Seq[(Int, Seq[Int])] = {
-    def getCombinationNumbers(ordering: Seq[Int], total: Int): Seq[Int] = {
-      ordering.scanLeft(1){ case (c, i) ⇒ c * i / (total - i + 1)}
+    /** Returns the sequence of combination numbers, together with the sequence of indices.
+      *
+      * @param total The number of elements.
+      * @return Sequence of pairs `(i, c)` where `i` goes from `total` to `0` and
+      *         `c` is equal to the number of combinations of `i` from `total`.
+      *         `c == total! / (i! * (total - i)! )`
+      */
+    def getCombinationNumbers(total: Int): Seq[(Int, Int)] = {
+      val ordering = total to 0 by -1
+      ordering zip ordering.scanLeft(1) { case (c, i) ⇒ c * i / (total - i + 1) }
     }
 
     def getTermCoeffsRec(m: Int, total: Int): Seq[(Int, List[Int])] = {
       if (m <= 1 || total == 0) {
         Seq((1, List.fill[Int](m)(total)))
       } else {
-        val ordering = total to 0 by -1
         val res = for {
-          pC <- ordering zip getCombinationNumbers(ordering, total)
+          pC <- getCombinationNumbers(total)
           (p, c) = pC
           termCoeffs <- getTermCoeffsRec(m - 1, total - p)
           (coeff, indices) = termCoeffs
@@ -260,7 +267,6 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
     getTermCoeffsRec(len, d.toInt)
   }
 
-
   override def expandInternal: Sum =
     if (d.toInt >= 0) {
       // We can expand only if the exponent is non-negative.
@@ -270,12 +276,12 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
         case (Some(head), tail) if tail.isEmpty ⇒ // If x.expand has only one term, we have nothing to expand.
           Sum(IntPow(head, d))
         case _ ⇒ // x.expand has at least 2 terms, need to expand
-          val terms = getTermCoeffs(xs.length) map {
+          val newMonomials = getTermCoeffs(xs.length) map {
             case (coeff, powers) ⇒
               val newTerms = (xs zip powers).map { case (e, i) ⇒ IntPow(e, i) } :+ Const(coeff)
               Product(newTerms: _*)
           }
-          Sum(terms: _*)
+          Sum(newMonomials: _*)
       }
     } else {
       // Cannot expand a negative power.
@@ -367,7 +373,19 @@ final case class Product(es: Expr*) extends Expr {
       val terms = for {
         t <- head.expandInternal.es
         z <- Product(tail: _*).expandInternal.es
-      } yield t * z
+      } yield Product(t, z).flatten
       Sum(terms: _*)
+  }
+
+  /** If any of the multiplicands are a [[Product]], the list is flattened.
+    *
+    * @return A simplified (flattened) but equivalent [[Product]] term.
+    */
+  private[symcal] def flatten: Product = {
+    val newTerms = es.flatMap {
+      case Product(fs@_*) ⇒ fs
+      case t ⇒ Seq(t)
+    }
+    Product(newTerms: _*)
   }
 }
