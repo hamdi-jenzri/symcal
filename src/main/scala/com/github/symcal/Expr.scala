@@ -39,7 +39,14 @@ sealed trait Expr {
   def freeVars: Set[Var] = Expr.freeVars(this)
 
   def isConst: Boolean = false
+
+  def expand: ExprExpanded
 }
+
+/** This type *could* be a result of an `.expand()` call.
+  *
+  */
+sealed trait ExprExpanded extends Expr
 
 object Expr {
   /** If this implicit conversion is moved to `package.scala`, the expression 4 + Var('x) does not compile.
@@ -82,6 +89,8 @@ final case class Const(value: Int) extends Expr {
   override def simplify: Expr = this
 
   override def isConst: Boolean = true
+
+  override def expand: ExprExpanded = Sum(this)
 }
 
 final case class Subtract(x: Expr, y: Expr) extends Expr {
@@ -101,6 +110,8 @@ final case class Subtract(x: Expr, y: Expr) extends Expr {
   }
 
   override protected def toStringInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
+
+  override def expand: ExprExpanded = Sum(x.expand, -y.expand)
 }
 
 final case class Minus(x: Expr) extends Expr {
@@ -119,9 +130,12 @@ final case class Minus(x: Expr) extends Expr {
     case Minus(a) ⇒ a
     case xs => Minus(xs)
   }
-}
 
-//case class FlatSum(xs: IndexedSeq[Expr])
+  override def expand: ExprExpanded = x.expand match {
+    case Sum(es@_*) => Sum(es.map(-_))
+    case z@Product(_) => Sum(-z)
+  }
+}
 
 final case class Add(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt + y.toInt
@@ -140,6 +154,8 @@ final case class Add(x: Expr, y: Expr) extends Expr {
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
+
+  override def expand: ExprExpanded = Sum(x.expand, y.expand)
 }
 
 final case class Multiply(x: Expr, y: Expr) extends Expr {
@@ -161,6 +177,14 @@ final case class Multiply(x: Expr, y: Expr) extends Expr {
   override def toStringInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
+
+  override def expand: ExprExpanded = (x.expand, y.expand) match {
+    case (Sum(es@_*), Sum(fs@_*)) ⇒
+    case (Sum(es@_*), Product(fs@_*)) ⇒
+    case (Product(es@_*), Sum(fs@_*)) ⇒
+    case (Product(es@_*), Product(fs@_*)) ⇒ Product(es ++ fs)
+
+  }
 }
 
 final case class Var(name: Symbol) extends Expr {
@@ -179,6 +203,8 @@ final case class Var(name: Symbol) extends Expr {
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
   override def simplify: Expr = this
+
+  override def expand: ExprExpanded = Sum(this)
 }
 
 final case class IntPow(x: Expr, d: Const) extends Expr {
@@ -202,9 +228,11 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
   override def toStringInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.toString
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
+
+  override def expand: ExprExpanded = ???
 }
 
-final case class Sum(es: Expr*) extends Expr {
+final case class Sum(es: Expr*) extends ExprExpanded {
   override def toInt: Int = es.map(_.toInt).sum
 
   private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
@@ -234,14 +262,16 @@ final case class Sum(es: Expr*) extends Expr {
       case None ⇒ Const(0) // Empty sum is transformed into `Const(0)`.
     }
   }
+
+  override def expand: ExprExpanded = Sum(es.map(_.expand))
 }
 
-final case class Product(es: Expr*) extends Expr {
+final case class Product(es: Expr*) extends ExprExpanded {
   override def toInt: Int = es.map(_.toInt).product
 
   override def diffInternal(x: Var): Expr = {
     val diffs = es.map(_.diff(x))
-    val replaced = diffs.zipWithIndex.map{ case (expr, index) ⇒ Product(es.updated(index, expr): _*)}
+    val replaced = diffs.zipWithIndex.map { case (expr, index) ⇒ Product(es.updated(index, expr): _*) }
     Sum(replaced: _*)
   }
 
@@ -271,4 +301,6 @@ final case class Product(es: Expr*) extends Expr {
       case None ⇒ Const(1) // Empty product is transformed into `Const(1)`.
     }
   }
+
+  override def expand: ExprExpanded = Sum(es.map(_.expand))
 }
