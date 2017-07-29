@@ -26,27 +26,22 @@ sealed trait Expr {
 
   final private[symcal] def stringForm(level: Int): String =
     if (precedenceLevel < level)
-      "(" + toStringInternal + ")"
+      "(" + printedInternal + ")"
     else
-      toStringInternal
+      printedInternal
 
   def precedenceLevel: Int
 
-  protected def toStringInternal: String
+  protected def printedInternal: String
 
-  override final def toString: String = stringForm(0)
+  final def printed: String = stringForm(0)
 
   def freeVars: Set[Var] = Expr.freeVars(this)
 
   def isConst: Boolean = false
 
-  def expand: ExprExpanded
+  def expand: Sum
 }
-
-/** This type *could* be a result of an `.expand()` call.
-  *
-  */
-sealed trait ExprExpanded extends Expr
 
 object Expr {
   /** If this implicit conversion is moved to `package.scala`, the expression 4 + Var('x) does not compile.
@@ -84,13 +79,13 @@ final case class Const(value: Int) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
-  override def toStringInternal: String = value.toString
+  override def printedInternal: String = value.toString
 
   override def simplify: Expr = this
 
   override def isConst: Boolean = true
 
-  override def expand: ExprExpanded = Sum(this)
+  override def expand: Sum = Sum(this)
 }
 
 final case class Subtract(x: Expr, y: Expr) extends Expr {
@@ -109,9 +104,9 @@ final case class Subtract(x: Expr, y: Expr) extends Expr {
     case (xs, ys) ⇒ xs - ys
   }
 
-  override protected def toStringInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
+  override protected def printedInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
 
-  override def expand: ExprExpanded = Sum(x.expand, -y.expand)
+  override def expand: Sum = Sum(x.expand.es ++ y.expand.es.map(-_): _*)
 }
 
 final case class Minus(x: Expr) extends Expr {
@@ -123,7 +118,7 @@ final case class Minus(x: Expr) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
-  override protected def toStringInternal: String = "-" + x.stringForm(precedenceLevel)
+  override protected def printedInternal: String = "-" + x.stringForm(precedenceLevel)
 
   override def simplify: Expr = x.simplify match {
     case Const(a) ⇒ Const(-a)
@@ -131,10 +126,7 @@ final case class Minus(x: Expr) extends Expr {
     case xs => Minus(xs)
   }
 
-  override def expand: ExprExpanded = x.expand match {
-    case Sum(es@_*) => Sum(es.map(-_))
-    case z@Product(_) => Sum(-z)
-  }
+  override def expand: Sum = Sum(x.expand.es.map(-_): _*)
 }
 
 final case class Add(x: Expr, y: Expr) extends Expr {
@@ -151,11 +143,11 @@ final case class Add(x: Expr, y: Expr) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) + y.subs(v, e)).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
+  override def printedInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  override def expand: ExprExpanded = Sum(x.expand, y.expand)
+  override def expand: Sum = Sum(x.expand, y.expand)
 }
 
 final case class Multiply(x: Expr, y: Expr) extends Expr {
@@ -174,16 +166,16 @@ final case class Multiply(x: Expr, y: Expr) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) * y.subs(v, e)).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
+  override def printedInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
-  override def expand: ExprExpanded = (x.expand, y.expand) match {
-    case (Sum(es@_*), Sum(fs@_*)) ⇒
-    case (Sum(es@_*), Product(fs@_*)) ⇒
-    case (Product(es@_*), Sum(fs@_*)) ⇒
-    case (Product(es@_*), Product(fs@_*)) ⇒ Product(es ++ fs)
-
+  override def expand: Sum = {
+    val terms = for {
+      xx <- x.expand.es
+      yy <- y.expand.es
+    } yield xx * yy
+    Sum(terms: _*)
   }
 }
 
@@ -198,13 +190,13 @@ final case class Var(name: Symbol) extends Expr {
     case _ ⇒ this
   }
 
-  override def toStringInternal: String = name.name
+  override def printedInternal: String = name.name
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
   override def simplify: Expr = this
 
-  override def expand: ExprExpanded = Sum(this)
+  override def expand: Sum = Sum(this)
 }
 
 final case class IntPow(x: Expr, d: Const) extends Expr {
@@ -225,14 +217,14 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = IntPow(x.subs(v, e), d).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.toString
+  override def printedInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.printed
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
-  override def expand: ExprExpanded = ???
+  override def expand: Sum = ???
 }
 
-final case class Sum(es: Expr*) extends ExprExpanded {
+final case class Sum(es: Expr*) extends Expr {
   override def toInt: Int = es.map(_.toInt).sum
 
   private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
@@ -241,7 +233,7 @@ final case class Sum(es: Expr*) extends ExprExpanded {
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" + ")
+  override protected def printedInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" + ")
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
@@ -263,10 +255,10 @@ final case class Sum(es: Expr*) extends ExprExpanded {
     }
   }
 
-  override def expand: ExprExpanded = Sum(es.map(_.expand))
+  override def expand: Sum = Sum(es.flatMap(_.expand.es): _*)
 }
 
-final case class Product(es: Expr*) extends ExprExpanded {
+final case class Product(es: Expr*) extends Expr {
   override def toInt: Int = es.map(_.toInt).product
 
   override def diffInternal(x: Var): Expr = {
@@ -279,7 +271,7 @@ final case class Product(es: Expr*) extends ExprExpanded {
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
-  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
+  override protected def printedInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
@@ -302,5 +294,5 @@ final case class Product(es: Expr*) extends ExprExpanded {
     }
   }
 
-  override def expand: ExprExpanded = Sum(es.map(_.expand))
+  override def expand: Sum = Sum(es.map(_.expand): _*)
 }
