@@ -295,10 +295,10 @@ class ExprSpec extends FlatSpec with Matchers {
   behavior of "expand"
 
   it should "expand monomials without change" in {
-    Const(1).expand shouldEqual Sum(Const(1))
+    Const(1).expand shouldEqual Const(1)
     ('x * 'y).expand.print shouldEqual "x * y"
-    (-'x).expand shouldEqual Sum(Minus(Var('x)))
-    (-'x * 'y).expand shouldEqual Sum(Minus(Var('x)) * Var('y))
+    (-'x).expand shouldEqual Minus(Var('x))
+    (-'x * 'y).expand shouldEqual Minus(Var('x)) * Var('y)
   }
 
   it should "expand sums" in {
@@ -311,7 +311,8 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "expand products" in {
-    (('a + 'b) * ('a + 'b)).expand shouldEqual ('a * 'a + 'a * 'b + 'b * 'a + 'b * 'b).expand
+    (('a + 'b) * ('a + 'b)).expand.print shouldEqual "a * a + a * b + b * a + b * b"
+    (('a + 1) * ('a + 1) * ('a + 1)).expand.print shouldEqual "a * a * a + a * a + a * a + a + a * a + a + a + 1"
   }
 
 }
