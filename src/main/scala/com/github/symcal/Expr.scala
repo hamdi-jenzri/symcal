@@ -265,7 +265,7 @@ final case class Product(es: Expr*) extends Expr {
     mergedExprs.headOption match {
       case Some(e) ⇒
         if (mergedExprs.length == 1) {
-          // In this case, the simplified result is not a `Sum`.
+          // In this case, the simplified result is not a `Product`.
           e
         } else Product(mergedExprs: _*)
       case None ⇒ Const(1) // Empty product is transformed into `Const(1)`.
