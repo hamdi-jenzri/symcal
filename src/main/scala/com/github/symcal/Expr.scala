@@ -7,7 +7,10 @@ sealed trait Expr {
 
   def -(x: Expr): Expr = Subtract(this, x)
 
-  def unary_- : Expr = Minus(this)
+  def unary_- : Expr = this match {
+    case Minus(x) ⇒ x
+    case y ⇒ Minus(y)
+  }
 
   def *(x: Expr): Expr = Multiply(this, x)
 
@@ -34,7 +37,7 @@ sealed trait Expr {
 
   protected def printedInternal: String
 
-  final def printed: String = stringForm(0)
+  final def print: String = stringForm(0)
 
   def freeVars: Set[Var] = Expr.freeVars(this)
 
@@ -106,6 +109,10 @@ final case class Subtract(x: Expr, y: Expr) extends Expr {
 
   override protected def printedInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
 
+  /** The result of `expand` is always a [[Sum]] that contains no nested [[Sum]]s.
+    *
+    * @return Equivalent expression with flattened structure, expanding all parentheses.
+    */
   override def expand: Sum = Sum(x.expand.es ++ y.expand.es.map(-_): _*)
 }
 
@@ -143,7 +150,13 @@ final case class Add(x: Expr, y: Expr) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) + y.subs(v, e)).simplify
 
-  override def printedInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
+  override def printedInternal: String = {
+    val rest = y match {
+      case Minus(yy) ⇒ " - " + yy.stringForm(Expr.precedenceOfMultiply)
+      case _ ⇒ " + " + y.stringForm(precedenceLevel)
+    }
+    x.stringForm(precedenceLevel) + rest
+  }
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
@@ -217,7 +230,7 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = IntPow(x.subs(v, e), d).simplify
 
-  override def printedInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.printed
+  override def printedInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.print
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
@@ -233,7 +246,15 @@ final case class Sum(es: Expr*) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  override protected def printedInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" + ")
+  override protected def printedInternal: String = (es.headOption, es.drop(1)) match {
+    case (None, _) => "0" // empty Sum()
+    case (Some(head), tail) ⇒ head.stringForm(precedenceLevel) +
+      tail.map {
+        case Minus(t) ⇒ " - " + t.stringForm(Expr.precedenceOfMultiply)
+        case t ⇒ " + " + t.stringForm(precedenceLevel)
+      }
+        .mkString("")
+  }
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
