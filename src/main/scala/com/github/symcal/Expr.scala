@@ -373,7 +373,7 @@ final case class Product(es: Expr*) extends Expr {
       mergedConstants match {
         case Const(0) ⇒ Seq(Const(0))
         case Const(1) ⇒ nonconst
-        case _ ⇒ nonconst :+ mergedConstants
+        case _ ⇒ Seq(mergedConstants) ++ nonconst
       }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {

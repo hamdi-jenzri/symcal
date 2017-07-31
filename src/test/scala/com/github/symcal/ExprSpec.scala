@@ -277,7 +277,7 @@ class ExprSpec extends FlatSpec with Matchers {
 
     // both constants and non-constants
     Product('x, 1, 2, 'x, 0, 'x, 1, 1, 3).simplify shouldEqual Const(0)
-    Product('x, 1, 2, 'x, 1, 'x, 1, 1, 3).simplify shouldEqual Product('x, 'x, 'x, 6)
+    Product('x, 1, 2, 'x, 1, 'x, 1, 1, 3).simplify shouldEqual Product(6, 'x, 'x, 'x)
   }
 
   it should "convert to int" in {
@@ -327,9 +327,9 @@ class ExprSpec extends FlatSpec with Matchers {
   it should "expand powers" in {
     (('x + 'y) #^ 0).expand.print shouldEqual "1"
     (('x + 'y) #^ 1).expand.print shouldEqual "x + y"
-    (('x + 'y) #^ 2).expand.print shouldEqual "x^2 + x * y * 2 + y^2"
-    (('x + 'y) #^ 3).expand.print shouldEqual "x^3 + x^2 * y * 3 + x * y^2 * 3 + y^3"
-    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + a^2 * b * 3 + a^2 * c * 3 + a * b^2 * 3 + a * b * c * 6 + a * c^2 * 3 + b^3 + b^2 * c * 3 + b * c^2 * 3 + c^3"
-    (('x + 'y + 2) #^ 5).expand.print shouldEqual "x^5 + x^4 * y * 5 + x^4 * 10 + x^3 * y^2 * 10 + x^3 * y * 40 + x^3 * 40 + x^2 * y^3 * 10 + x^2 * y^2 * 60 + x^2 * y * 120 + x^2 * 80 + x * y^4 * 5 + x * y^3 * 40 + x * y^2 * 120 + x * y * 160 + x * 80 + y^5 + y^4 * 10 + y^3 * 40 + y^2 * 80 + y * 80 + 32"
+    (('x + 'y) #^ 2).expand.print shouldEqual "x^2 + 2 * x * y + y^2"
+    (('x + 'y) #^ 3).expand.print shouldEqual "x^3 + 3 * x^2 * y + 3 * x * y^2 + y^3"
+    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + 3 * a^2 * b + 3 * a^2 * c + 3 * a * b^2 + 6 * a * b * c + 3 * a * c^2 + b^3 + 3 * b^2 * c + 3 * b * c^2 + c^3"
+    (('x + 'y + 2) #^ 5).expand.print shouldEqual "x^5 + 5 * x^4 * y + 10 * x^4 + 10 * x^3 * y^2 + 40 * x^3 * y + 40 * x^3 + 10 * x^2 * y^3 + 60 * x^2 * y^2 + 120 * x^2 * y + 80 * x^2 + 5 * x * y^4 + 40 * x * y^3 + 120 * x * y^2 + 160 * x * y + 80 * x + y^5 + 10 * y^4 + 40 * y^3 + 80 * y^2 + 80 * y + 32"
   }
 }
