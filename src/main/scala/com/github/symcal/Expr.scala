@@ -3,16 +3,31 @@ package com.github.symcal
 import scala.language.implicitConversions
 
 sealed trait Expr {
-  def +(x: Expr): Add = Add(this, x)
+  def +(x: Expr): Sum = (this, x) match {
+    case (Sum(y@_*), Sum(z@_*)) => Sum(y ++ z: _*)
+    case (Sum(y@_*), _) => Sum(y :+ x: _*)
+    case (_, Sum(z@_*)) => Sum(Seq(this) ++ z: _*)
+    case (_, _) => Sum(this, x)
+  }
 
-  def -(x: Expr): Subtract = Subtract(this, x)
+  def -(x: Expr): Sum = (this, x) match {
+    case (Sum(y@_*), Sum(z@_*)) => Sum(y ++ z.map(-_): _*)
+    case (Sum(y@_*), _) => Sum(y :+ -x: _*)
+    case (_, Sum(z@_*)) => Sum(Seq(this) ++ z.map(-_): _*)
+    case (_, _) => Sum(this, -x)
+  }
 
   def unary_- : Expr = this match {
     case Minus(x) ⇒ x
     case y ⇒ Minus(y)
   }
 
-  def *(x: Expr): Multiply = Multiply(this, x)
+  def *(x: Expr): Product = (this, x) match {
+    case (Product(y@_*), Product(z@_*)) => Product(y ++ z: _*)
+    case (Product(y@_*), _) => Product(y :+ x: _*)
+    case (_, Product(z@_*)) => Product(Seq(this) ++ z: _*)
+    case (_, _) => Product(this, x)
+  }
 
   // The '#' character is needed for precedence
   def #^(d: Int): IntPow = IntPow(this, d)
@@ -25,7 +40,9 @@ sealed trait Expr {
 
   def simplify: Expr
 
-  def subs(v: Var, e: Expr): Expr
+  final def subs(v: Var, e: Expr): Expr = subsInternal(v, e).simplify
+
+  private[symcal] def subsInternal(v: Var, e: Expr): Expr
 
   final private[symcal] def stringForm(level: Int): String =
     if (precedenceLevel < level)
@@ -63,13 +80,10 @@ object Expr {
   final val precedenceOfConst = 100
 
   def freeVars(e: Expr): Set[Var] = e match {
-    case Const(value) ⇒ Set()
-    case Subtract(x, y) ⇒ freeVars(x) ++ freeVars(y)
+    case Const(_) ⇒ Set()
     case Minus(x) ⇒ freeVars(x)
-    case Add(x, y) ⇒ freeVars(x) ++ freeVars(y)
-    case Multiply(x, y) ⇒ freeVars(x) ++ freeVars(y)
     case Var(name) ⇒ Set(Var(name))
-    case IntPow(x, d) ⇒ freeVars(x)
+    case IntPow(x, _) ⇒ freeVars(x)
     case Sum(es@_*) ⇒ es.flatMap(freeVars).toSet
     case Product(es@_*) ⇒ es.flatMap(freeVars).toSet
   }
@@ -130,7 +144,7 @@ final case class Const(value: Int) extends Expr {
 
   private[symcal] def diffInternal(x: Var): Expr = Const(0)
 
-  override def subs(v: Var, e: Expr): Expr = this
+  override def subsInternal(v: Var, e: Expr): Expr = this
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
@@ -143,37 +157,12 @@ final case class Const(value: Int) extends Expr {
   override def expandInternal: Sum = Sum(this)
 }
 
-final case class Subtract(x: Expr, y: Expr) extends Expr {
-  override def toInt: Int = x.toInt - y.toInt
-
-  private[symcal] def diffInternal(z: Var): Expr = x.diff(z) - y.diff(z)
-
-  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) - y.subs(v, e)).simplify
-
-  override def precedenceLevel: Int = Expr.precedenceOfSubtract
-
-  override def simplify: Expr = (x.simplify, y.simplify) match {
-    case (Const(0), ys) ⇒ Minus(ys).simplify
-    case (xs, Const(0)) ⇒ xs
-    case (Const(a), Const(b)) ⇒ Const(a - b)
-    case (xs, ys) ⇒ xs - ys
-  }
-
-  override protected def printInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
-
-  /** The result of `expand` is always a [[Sum]] that contains no nested [[Sum]]s.
-    *
-    * @return Equivalent expression with flattened structure, expanding all parentheses.
-    */
-  override def expandInternal: Sum = Sum(x.expandInternal.es ++ y.expandInternal.es.map(-_): _*)
-}
-
 final case class Minus(x: Expr) extends Expr {
   override def toInt: Int = -x.toInt
 
   private[symcal] def diffInternal(z: Var): Expr = -x.diff(z)
 
-  override def subs(v: Var, e: Expr): Expr = (-x.subs(v, e)).simplify
+  override def subsInternal(v: Var, e: Expr): Expr = (-x.subsInternal(v, e)).simplify
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
@@ -188,69 +177,13 @@ final case class Minus(x: Expr) extends Expr {
   override def expandInternal: Sum = Sum(x.expandInternal.es.map(-_): _*)
 }
 
-final case class Add(x: Expr, y: Expr) extends Expr {
-  override def toInt: Int = x.toInt + y.toInt
-
-  private[symcal] def diffInternal(z: Var): Expr = x.diff(z) + y.diff(z)
-
-  override def simplify: Expr = (x.simplify, y.simplify) match {
-    case (Const(0), ys) => ys
-    case (xs, Const(0)) => xs
-    case (Const(a), Const(b)) => Const(a + b)
-    case (xs, ys) => xs + ys
-  }
-
-  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) + y.subs(v, e)).simplify
-
-  override def printInternal: String = {
-    val rest = y match {
-      case Minus(yy) ⇒ " - " + yy.stringForm(Expr.precedenceOfMultiply)
-      case _ ⇒ " + " + y.stringForm(precedenceLevel)
-    }
-    x.stringForm(precedenceLevel) + rest
-  }
-
-  override def precedenceLevel: Int = Expr.precedenceOfAdd
-
-  override def expandInternal: Sum = Sum(x.expandInternal.es ++ y.expandInternal.es: _*)
-}
-
-final case class Multiply(x: Expr, y: Expr) extends Expr {
-  override def toInt: Int = x.toInt * y.toInt
-
-  private[symcal] def diffInternal(z: Var): Expr = Multiply(x.diff(z), y) + Multiply(x, y.diff(z))
-
-  override def simplify: Expr = (x.simplify, y.simplify) match {
-    case (Const(1), ys) => ys
-    case (xs, Const(1)) => xs
-    case (Const(0), _) => Const(0)
-    case (_, Const(0)) => Const(0)
-    case (Const(a), Const(b)) => Const(a * b)
-    case (xs, ys) => xs * ys
-  }
-
-  override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) * y.subs(v, e)).simplify
-
-  override def printInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
-
-  override def precedenceLevel: Int = Expr.precedenceOfMultiply
-
-  override def expandInternal: Sum = {
-    val terms = for {
-      xx <- x.expandInternal.es
-      yy <- y.expandInternal.es
-    } yield Product(xx, yy).flatten
-    Sum(terms: _*)
-  }
-}
-
 final case class Var(name: Symbol) extends Expr {
   override def toInt: Int =
     throw new Exception(s"Cannot evaluate toInt for an expression containing a variable ${name.name}.")
 
   private[symcal] def diffInternal(x: Var): Expr = if (name == x.name) Const(1) else Const(0)
 
-  override def subs(v: Var, e: Expr): Expr = v match {
+  override def subsInternal(v: Var, e: Expr): Expr = v match {
     case Var(`name`) ⇒ e
     case _ ⇒ this
   }
@@ -280,7 +213,7 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
     case (xs, _) ⇒ IntPow(xs, d)
   }
 
-  override def subs(v: Var, e: Expr): Expr = IntPow(x.subs(v, e), d).simplify
+  override def subsInternal(v: Var, e: Expr): Expr = IntPow(x.subsInternal(v, e), d).simplify
 
   override def printInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.print
 
@@ -313,7 +246,7 @@ final case class Sum(es: Expr*) extends Expr {
 
   private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
 
-  override def subs(v: Var, e: Expr): Expr = Sum(es.map(_.subs(v, e)): _*)
+  override def subsInternal(v: Var, e: Expr): Expr = Sum(es.map(_.subsInternal(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
@@ -330,12 +263,11 @@ final case class Sum(es: Expr*) extends Expr {
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
     // mergedConstants is always non-empty but can be Const(0)
-    val mergedConstants = const.foldLeft[Expr](Const(0))((x, y) ⇒ (x + y).simplify)
-    val mergedExprs =
-      mergedConstants match {
-        case Const(0) ⇒ nonconst
-        case _ ⇒ nonconst :+ mergedConstants
-      }
+    val mergedConstants = const.foldLeft[Expr](Const(0))((x, y) ⇒ Const(x.toInt + y.toInt))
+    val mergedExprs = mergedConstants match {
+      case Const(0) ⇒ nonconst
+      case _ ⇒ nonconst :+ mergedConstants
+    }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
       case Some(e) ⇒
@@ -359,7 +291,7 @@ final case class Product(es: Expr*) extends Expr {
     Sum(replaced: _*)
   }
 
-  override def subs(v: Var, e: Expr): Expr = Product(es.map(_.subs(v, e)): _*)
+  override def subsInternal(v: Var, e: Expr): Expr = Product(es.map(_.subsInternal(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
@@ -368,7 +300,7 @@ final case class Product(es: Expr*) extends Expr {
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
     // mergedConstants is always non-empty but can be Const(0) or Const(1)
-    val mergedConstants = const.foldLeft[Expr](Const(1))((x, y) ⇒ (x * y).simplify)
+    val mergedConstants = const.foldLeft[Expr](Const(1))((x, y) ⇒ Const(x.toInt * y.toInt))
     val mergedExprs =
       mergedConstants match {
         case Const(0) ⇒ Seq(Const(0))
