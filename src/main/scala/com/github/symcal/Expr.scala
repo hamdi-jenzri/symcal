@@ -3,16 +3,19 @@ package com.github.symcal
 import scala.language.implicitConversions
 
 sealed trait Expr {
-  def +(x: Expr): Expr = Add(this, x)
+  def +(x: Expr): Add = Add(this, x)
 
-  def -(x: Expr): Expr = Subtract(this, x)
+  def -(x: Expr): Subtract = Subtract(this, x)
 
-  def unary_- : Expr = Minus(this)
+  def unary_- : Expr = this match {
+    case Minus(x) ⇒ x
+    case y ⇒ Minus(y)
+  }
 
-  def *(x: Expr): Expr = Multiply(this, x)
+  def *(x: Expr): Multiply = Multiply(this, x)
 
   // The '#' character is needed for precedence
-  def #^(d: Int): Expr = IntPow(this, d)
+  def #^(d: Int): IntPow = IntPow(this, d)
 
   def toInt: Int
 
@@ -26,19 +29,23 @@ sealed trait Expr {
 
   final private[symcal] def stringForm(level: Int): String =
     if (precedenceLevel < level)
-      "(" + toStringInternal + ")"
+      "(" + printInternal + ")"
     else
-      toStringInternal
+      printInternal
 
   def precedenceLevel: Int
 
-  protected def toStringInternal: String
+  protected def printInternal: String
 
-  override final def toString: String = stringForm(0)
+  final def print: String = stringForm(0)
 
   def freeVars: Set[Var] = Expr.freeVars(this)
 
   def isConst: Boolean = false
+
+  def expand: Expr = expandInternal.simplify
+
+  private[symcal] def expandInternal: Sum
 }
 
 object Expr {
@@ -66,6 +73,56 @@ object Expr {
     case Sum(es@_*) ⇒ es.flatMap(freeVars).toSet
     case Product(es@_*) ⇒ es.flatMap(freeVars).toSet
   }
+
+  /** Auxiliary function. Returns the sequence of coefficients and powers for multinomial expansion.
+    * For example, to compute the expansion `(x + y)^3` we call `getTermCoeffs(2, 3)`, which returns the sequence
+    * {{{
+    *   Seq(
+    *     (1, Seq(3, 0)),
+    *     (3, Seq(2, 1)),
+    *     (3, Seq(1, 2)),
+    *     (1, Seq(0, 3))
+    *   )
+    * }}}
+    * This allows us to build the expansion as `x^3 + 3*x^2*y + 3*x*y^2 + y^3`.
+    *
+    * @param len   Length of the sum list to be expanded.
+    * @param power Power of the expansion.
+    * @return Sequence of coefficients and power indices for individual subterms.
+    */
+  private[symcal] def getTermCoeffs(len: Int, power: Int): Seq[(Int, Seq[Int])] = {
+
+    /** Auxiliary function. Returns the sequence of combination numbers, together with the sequence of indices.
+      * For example, `getCombinationNumbers(4)` returns `Seq( (4, 1), (3, 4), (2, 6), (1, 4), (0, 1) )`
+      * which corresponds to the coefficients in the expansion `(x + 1) ^ 4 = x^4 + 4*x^3 + 6*x^2 + 4*x + 1`.
+      *
+      * @param total The number of elements.
+      * @return Sequence of pairs `(i, c)` where `i` goes from `total` to `0` and
+      *         `c` is equal to the number of combinations of `i` from `total`.
+      *         `c == total! / (i! * (total - i)! )`
+      */
+    def getCombinationNumbers(total: Int): Seq[(Int, Int)] = {
+      val ordering = total to 0 by -1
+      ordering zip ordering.scanLeft(1) { case (c, i) ⇒ c * i / (total - i + 1) }
+    }
+
+    def getTermCoeffsRec(m: Int, total: Int): Seq[(Int, List[Int])] = {
+      if (m <= 1 || total == 0) {
+        Seq((1, List.fill[Int](m)(total)))
+      } else {
+        val result: Seq[(Int, List[Int])] = for {
+          pC <- getCombinationNumbers(total)
+          (p, c) = pC
+          termCoeffs <- getTermCoeffsRec(m - 1, total - p)
+          (coeff, indices) = termCoeffs
+        } yield
+          (c * coeff, p :: indices)
+        result
+      }
+    }
+
+    getTermCoeffsRec(len, power)
+  }
 }
 
 final case class Const(value: Int) extends Expr {
@@ -77,11 +134,13 @@ final case class Const(value: Int) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
-  override def toStringInternal: String = value.toString
+  override def printInternal: String = value.toString
 
   override def simplify: Expr = this
 
   override def isConst: Boolean = true
+
+  override def expandInternal: Sum = Sum(this)
 }
 
 final case class Subtract(x: Expr, y: Expr) extends Expr {
@@ -100,7 +159,13 @@ final case class Subtract(x: Expr, y: Expr) extends Expr {
     case (xs, ys) ⇒ xs - ys
   }
 
-  override protected def toStringInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
+  override protected def printInternal: String = x.stringForm(Expr.precedenceOfAdd) + " - " + y.stringForm(Expr.precedenceOfMultiply)
+
+  /** The result of `expand` is always a [[Sum]] that contains no nested [[Sum]]s.
+    *
+    * @return Equivalent expression with flattened structure, expanding all parentheses.
+    */
+  override def expandInternal: Sum = Sum(x.expandInternal.es ++ y.expandInternal.es.map(-_): _*)
 }
 
 final case class Minus(x: Expr) extends Expr {
@@ -112,16 +177,16 @@ final case class Minus(x: Expr) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
-  override protected def toStringInternal: String = "-" + x.stringForm(precedenceLevel)
+  override protected def printInternal: String = "-" + x.stringForm(precedenceLevel)
 
   override def simplify: Expr = x.simplify match {
     case Const(a) ⇒ Const(-a)
     case Minus(a) ⇒ a
     case xs => Minus(xs)
   }
-}
 
-//case class FlatSum(xs: IndexedSeq[Expr])
+  override def expandInternal: Sum = Sum(x.expandInternal.es.map(-_): _*)
+}
 
 final case class Add(x: Expr, y: Expr) extends Expr {
   override def toInt: Int = x.toInt + y.toInt
@@ -137,9 +202,17 @@ final case class Add(x: Expr, y: Expr) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) + y.subs(v, e)).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel) + " + " + y.stringForm(precedenceLevel)
+  override def printInternal: String = {
+    val rest = y match {
+      case Minus(yy) ⇒ " - " + yy.stringForm(Expr.precedenceOfMultiply)
+      case _ ⇒ " + " + y.stringForm(precedenceLevel)
+    }
+    x.stringForm(precedenceLevel) + rest
+  }
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
+
+  override def expandInternal: Sum = Sum(x.expandInternal.es ++ y.expandInternal.es: _*)
 }
 
 final case class Multiply(x: Expr, y: Expr) extends Expr {
@@ -158,9 +231,17 @@ final case class Multiply(x: Expr, y: Expr) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = (x.subs(v, e) * y.subs(v, e)).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
+  override def printInternal: String = x.stringForm(precedenceLevel) + " * " + y.stringForm(precedenceLevel)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
+
+  override def expandInternal: Sum = {
+    val terms = for {
+      xx <- x.expandInternal.es
+      yy <- y.expandInternal.es
+    } yield Product(xx, yy).flatten
+    Sum(terms: _*)
+  }
 }
 
 final case class Var(name: Symbol) extends Expr {
@@ -174,11 +255,13 @@ final case class Var(name: Symbol) extends Expr {
     case _ ⇒ this
   }
 
-  override def toStringInternal: String = name.name
+  override def printInternal: String = name.name
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
   override def simplify: Expr = this
+
+  override def expandInternal: Sum = Sum(this)
 }
 
 final case class IntPow(x: Expr, d: Const) extends Expr {
@@ -199,9 +282,30 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 
   override def subs(v: Var, e: Expr): Expr = IntPow(x.subs(v, e), d).simplify
 
-  override def toStringInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.toString
+  override def printInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.print
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
+
+  override def expandInternal: Sum =
+    if (d.toInt >= 0) {
+      // We can expand only if the exponent is non-negative.
+      val xs = x.expandInternal.es
+      (xs.headOption, xs.drop(1)) match {
+        case (None, _) ⇒ Sum(IntPow(Const(0), d)) // Empty Sum is equivalent to 0.
+        case (Some(head), tail) if tail.isEmpty ⇒ // If x.expand has only one term, we have nothing to expand.
+          Sum(IntPow(head, d))
+        case _ ⇒ // x.expand has at least 2 terms, need to expand
+          val newMonomials = Expr.getTermCoeffs(xs.length, d.toInt) map {
+            case (coeff, powers) ⇒
+              val newTerms = (xs zip powers).map { case (e, i) ⇒ IntPow(e, i) } :+ Const(coeff)
+              Product(newTerms: _*)
+          }
+          Sum(newMonomials: _*)
+      }
+    } else {
+      // Cannot expand a negative power.
+      Sum(this)
+    }
 }
 
 final case class Sum(es: Expr*) extends Expr {
@@ -213,7 +317,15 @@ final case class Sum(es: Expr*) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" + ")
+  override protected def printInternal: String = (es.headOption, es.drop(1)) match {
+    case (None, _) => "0" // empty Sum()
+    case (Some(head), tail) ⇒ head.stringForm(precedenceLevel) +
+      tail.map {
+        case Minus(t) ⇒ " - " + t.stringForm(Expr.precedenceOfMultiply)
+        case t ⇒ " + " + t.stringForm(precedenceLevel)
+      }
+        .mkString("")
+  }
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
@@ -234,6 +346,8 @@ final case class Sum(es: Expr*) extends Expr {
       case None ⇒ Const(0) // Empty sum is transformed into `Const(0)`.
     }
   }
+
+  override def expandInternal: Sum = Sum(es.flatMap(_.expandInternal.es): _*)
 }
 
 final case class Product(es: Expr*) extends Expr {
@@ -241,7 +355,7 @@ final case class Product(es: Expr*) extends Expr {
 
   override def diffInternal(x: Var): Expr = {
     val diffs = es.map(_.diff(x))
-    val replaced = diffs.zipWithIndex.map{ case (expr, index) ⇒ Product(es.updated(index, expr): _*)}
+    val replaced = diffs.zipWithIndex.map { case (expr, index) ⇒ Product(es.updated(index, expr): _*) }
     Sum(replaced: _*)
   }
 
@@ -249,7 +363,7 @@ final case class Product(es: Expr*) extends Expr {
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
-  override protected def toStringInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
+  override protected def printInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
 
   override def simplify: Expr = {
     val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
@@ -259,7 +373,7 @@ final case class Product(es: Expr*) extends Expr {
       mergedConstants match {
         case Const(0) ⇒ Seq(Const(0))
         case Const(1) ⇒ nonconst
-        case _ ⇒ nonconst :+ mergedConstants
+        case _ ⇒ Seq(mergedConstants) ++ nonconst
       }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
@@ -270,5 +384,27 @@ final case class Product(es: Expr*) extends Expr {
         } else Product(mergedExprs: _*)
       case None ⇒ Const(1) // Empty product is transformed into `Const(1)`.
     }
+  }
+
+  override def expandInternal: Sum = (es.headOption, es.drop(1)) match {
+    case (None, _) ⇒ Sum(Const(1)) // empty Product()
+    case (Some(head), tail) ⇒
+      val terms = for {
+        t <- head.expandInternal.es
+        z <- Product(tail: _*).expandInternal.es
+      } yield Product(t, z).flatten
+      Sum(terms: _*)
+  }
+
+  /** If any of the multiplicands are a [[Product]], the list is flattened.
+    *
+    * @return A simplified (flattened) but equivalent [[Product]] term.
+    */
+  private[symcal] def flatten: Product = {
+    val newTerms = es.flatMap {
+      case Product(fs@_*) ⇒ fs
+      case t ⇒ Seq(t)
+    }
+    Product(newTerms: _*)
   }
 }

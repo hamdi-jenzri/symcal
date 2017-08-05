@@ -28,7 +28,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val x = Const(1)
     val y = x + Const(1)
     val z = Var('z)
-    (z + y).toString shouldEqual "z + 1 + 1"
+    (z + y).print shouldEqual "z + 1 + 1"
   }
 
   behavior of "automatic simplify"
@@ -39,7 +39,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val z = Var('z)
 
     val s = (x + y) * 2 * z
-    s.subs(x, 3).toString shouldEqual "(3 + y) * 2 * z"
+    s.subs(x, 3).print shouldEqual "(3 + y) * 2 * z"
 
     val t = s.subs(z, 3).diff(y)
     t.toInt shouldEqual 6
@@ -102,50 +102,54 @@ class ExprSpec extends FlatSpec with Matchers {
     ex3 shouldEqual Const(40)
   }
 
-  behavior of "toString"
+  behavior of "printed"
 
   it should "produce correct parentheses for simple expressions" in {
-    ('x + 1).toString shouldEqual "x + 1"
-    ('x + 'y).toString shouldEqual "x + y"
-    ('x + 'y + 'z).toString shouldEqual "x + y + z"
-    ('x * 2).toString shouldEqual "x * 2"
-    (Const(2) * 'x).toString shouldEqual "2 * x"
-    ('x * 'y).toString shouldEqual "x * y"
-    ('x * 'y * 2).toString shouldEqual "x * y * 2"
+    ('x + 1).print shouldEqual "x + 1"
+    ('x + 'y).print shouldEqual "x + y"
+    ('x + 'y + 'z).print shouldEqual "x + y + z"
+    ('x * 2).print shouldEqual "x * 2"
+    (Const(2) * 'x).print shouldEqual "2 * x"
+    ('x * 'y).print shouldEqual "x * y"
+    ('x * 'y * 2).print shouldEqual "x * y * 2"
   }
 
   it should "produce correct parentheses for compound expressions" in {
-    (('x + 1) * 2).toString shouldEqual "(x + 1) * 2"
-    ('y * ('x + 1) * 2).toString shouldEqual "y * (x + 1) * 2"
-    (('x + 1) * ('x + 2) * ('x + 3)).toString shouldEqual "(x + 1) * (x + 2) * (x + 3)"
+    (('x + 1) * 2).print shouldEqual "(x + 1) * 2"
+    ('y * ('x + 1) * 2).print shouldEqual "y * (x + 1) * 2"
+    (('x + 1) * ('x + 2) * ('x + 3)).print shouldEqual "(x + 1) * (x + 2) * (x + 3)"
   }
 
   it should "produce correct parentheses for IntPow" in {
-    ('x #^ 2).toString shouldEqual "x^2"
-    (Const(3) #^ 2).toString shouldEqual "3^2"
-    ('x #^ 2 + 1).toString shouldEqual "x^2 + 1"
-    ('x #^ 2 * 'x).toString shouldEqual "x^2 * x"
-    (('x + 1) #^ 2).toString shouldEqual "(x + 1)^2"
-    (('x * ('y + 1) + 2) #^ 2).toString shouldEqual "(x * (y + 1) + 2)^2"
-    (('x #^ 3) #^ 2).toString shouldEqual "(x^3)^2"
+    ('x #^ 2).print shouldEqual "x^2"
+    (Const(3) #^ 2).print shouldEqual "3^2"
+    ('x #^ 2 + 1).print shouldEqual "x^2 + 1"
+    ('x #^ 2 * 'x).print shouldEqual "x^2 * x"
+    (('x + 1) #^ 2).print shouldEqual "(x + 1)^2"
+    (('x * ('y + 1) + 2) #^ 2).print shouldEqual "(x * (y + 1) + 2)^2"
+    (('x #^ 3) #^ 2).print shouldEqual "(x^3)^2"
   }
 
   behavior of "subtract and minus"
 
   it should "produce correct parentheses" in {
-    (-Const(1)).toString shouldEqual "-1"
-    ('x - 1).toString shouldEqual "x - 1"
-    (-'x).toString shouldEqual "-x"
-    (-('x + 1)).toString shouldEqual "-(x + 1)"
-    (-('x - 1)).toString shouldEqual "-(x - 1)"
-    (-(-'x - 1)).toString shouldEqual "-(-x - 1)"
-    ('x * (-'y)).toString shouldEqual "x * (-y)"
-    ('x * ('z - 'y)).toString shouldEqual "x * (z - y)"
-    ('x - ('z + 'y)).toString shouldEqual "x - (z + y)"
-    ('x + ('z - 'y)).toString shouldEqual "x + z - y"
-    ('x - ('z - 'y)).toString shouldEqual "x - (z - y)"
-    (('x + 'z) - 'y).toString shouldEqual "x + z - y"
-    (-('x + 'z) - 'y).toString shouldEqual "-(x + z) - y"
+    (-Const(1)).print shouldEqual "-1"
+    ('x - 1).print shouldEqual "x - 1"
+    (-'x).print shouldEqual "-x"
+    (-('x + 1)).print shouldEqual "-(x + 1)"
+    (-('x - 1)).print shouldEqual "-(x - 1)"
+    (-(-'x - 1)).print shouldEqual "-(-x - 1)"
+    ('x * (-'y)).print shouldEqual "x * (-y)"
+    ('x * ('z - 'y)).print shouldEqual "x * (z - y)"
+    ('x - ('z + 'y)).print shouldEqual "x - (z + y)"
+    ('x + ('z - 'y)).print shouldEqual "x + z - y"
+    ('x - ('z - 'y)).print shouldEqual "x - (z - y)"
+    (('x + 'z) - 'y).print shouldEqual "x + z - y"
+    (-('x + 'z) - 'y).print shouldEqual "-(x + z) - y"
+  }
+
+  it should "simplify double minus" in {
+    -(-'x) shouldEqual Var('x)
   }
 
   it should "simplify constants" in {
@@ -187,23 +191,28 @@ class ExprSpec extends FlatSpec with Matchers {
 
   it should "print all summands" in {
     val x = Sum(1, 2, 3)
-    x.toString shouldEqual "1 + 2 + 3"
+    x.print shouldEqual "1 + 2 + 3"
     val y1 = Sum(1, 'x * 'z, 'y)
-    y1.toString shouldEqual "1 + x * z + y"
+    y1.print shouldEqual "1 + x * z + y"
     val y = Sum(1, 'x + 'z, 'y)
-    y.toString shouldEqual "1 + x + z + y"
+    y.print shouldEqual "1 + x + z + y"
     val s: Seq[Expr] = Seq(1, Sum('x + 'z, 'x + 3), 'y)
     val z = Sum(s: _*)
-    z.toString shouldEqual "1 + x + z + x + 3 + y"
+    z.print shouldEqual "1 + x + z + x + 3 + y"
     val t = 'x * z
-    t.toString shouldEqual "x * (1 + x + z + x + 3 + y)"
+    t.print shouldEqual "x * (1 + x + z + x + 3 + y)"
+  }
+
+  it should "print minus correctly" in {
+    ('a + (-'b)).print shouldEqual "a - b"
+    ('a - (-'b)).print shouldEqual "a - (-b)"
   }
 
   it should "compute derivative" in {
     val s: Seq[Expr] = Seq(1, Sum('x * 'z * 'x, 3 + 'x), 'y)
     val z = Sum(s: _*)
     val z_diff_x = z.diff('x)
-    z_diff_x.toString shouldEqual "z * x + x * z + 1"
+    z_diff_x.print shouldEqual "z * x + x * z + 1"
   }
 
   it should "simplify constants correctly" in {
@@ -237,20 +246,20 @@ class ExprSpec extends FlatSpec with Matchers {
 
   it should "print all multiplicands" in {
     val x = Product(1, 2, 3)
-    x.toString shouldEqual "1 * 2 * 3"
+    x.print shouldEqual "1 * 2 * 3"
     val y1 = Product(1, 'x + 'z, 'y)
-    y1.toString shouldEqual "1 * (x + z) * y"
+    y1.print shouldEqual "1 * (x + z) * y"
     val y = Product(1, 'x * 'z, 'y)
-    y.toString shouldEqual "1 * x * z * y"
+    y.print shouldEqual "1 * x * z * y"
     val s: Seq[Expr] = Seq(1, Product('x + 'z, 'x + 3, 'z), 'y)
     val z = Product(s: _*)
-    z.toString shouldEqual "1 * (x + z) * (x + 3) * z * y"
+    z.print shouldEqual "1 * (x + z) * (x + 3) * z * y"
     val t = 'x * z
-    t.toString shouldEqual "x * 1 * (x + z) * (x + 3) * z * y"
+    t.print shouldEqual "x * 1 * (x + z) * (x + 3) * z * y"
   }
 
   it should "compute derivative" in {
-    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).toString shouldEqual "((z * x + x * z) * (3 + x) + x * z * x) * y"
+    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).print shouldEqual "((z * x + x * z) * (3 + x) + x * z * x) * y"
   }
 
   it should "simplify constants correctly" in {
@@ -268,7 +277,7 @@ class ExprSpec extends FlatSpec with Matchers {
 
     // both constants and non-constants
     Product('x, 1, 2, 'x, 0, 'x, 1, 1, 3).simplify shouldEqual Const(0)
-    Product('x, 1, 2, 'x, 1, 'x, 1, 1, 3).simplify shouldEqual Product('x, 'x, 'x, 6)
+    Product('x, 1, 2, 'x, 1, 'x, 1, 1, 3).simplify shouldEqual Product(6, 'x, 'x, 'x)
   }
 
   it should "convert to int" in {
@@ -283,4 +292,44 @@ class ExprSpec extends FlatSpec with Matchers {
     Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product('z, 1, 'z, 2)
   }
 
+  behavior of "expand"
+
+  it should "expand monomials without change" in {
+    Const(1).expand shouldEqual Const(1)
+    ('x * 'y).expand.print shouldEqual "x * y"
+    (-'x).expand shouldEqual Minus(Var('x))
+    (-'x * 'y).expand shouldEqual Product(Minus(Var('x)), Var('y))
+  }
+
+  it should "expand sums" in {
+    ('a + 'b).expand shouldEqual Sum(Var('a), Var('b))
+    ('a - ('a - 'b)).expand shouldEqual Sum(Var('a), -Var('a), Var('b))
+    ('a - ('a - 'b)).expand.print shouldEqual "a - a + b"
+    ('a * 'a + 'a * 'b + 'b * 'a + 'b * 'b).expand.print shouldEqual "a * a + a * b + b * a + b * b"
+    (-('a + 'b)).expand shouldEqual Sum(-'a, -'b)
+    (-('a - 'b)).expand shouldEqual Sum(-'a, 'b)
+  }
+
+  it should "expand products" in {
+    (('a + 'b) * ('a + 'b)).expand.print shouldEqual "a * a + a * b + b * a + b * b"
+    (('a + 1) * ('a + 1) * ('a + 1)).expand.print shouldEqual "a * a * a + a * a + a * a + a + a * a + a + a + 1"
+
+    ('a * 'a * 'a).expand shouldEqual Product(Var('a), Var('a), Var('a))
+  }
+
+  behavior of "expand for power"
+
+  it should "compute correct multinomial coefficients" in {
+    Expr.getTermCoeffs(2, 2) shouldEqual Seq((1, Seq(2, 0)), (2, Seq(1, 1)), (1, Seq(0, 2)))
+    Expr.getTermCoeffs(2, 3) shouldEqual Seq((1, Seq(3, 0)), (3, Seq(2, 1)), (3, Seq(1, 2)), (1, Seq(0, 3)))
+  }
+
+  it should "expand powers" in {
+    (('x + 'y) #^ 0).expand.print shouldEqual "1"
+    (('x + 'y) #^ 1).expand.print shouldEqual "x + y"
+    (('x + 'y) #^ 2).expand.print shouldEqual "x^2 + 2 * x * y + y^2"
+    (('x + 'y) #^ 3).expand.print shouldEqual "x^3 + 3 * x^2 * y + 3 * x * y^2 + y^3"
+    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + 3 * a^2 * b + 3 * a^2 * c + 3 * a * b^2 + 6 * a * b * c + 3 * a * c^2 + b^3 + 3 * b^2 * c + 3 * b * c^2 + c^3"
+    (('x + 'y + 2) #^ 5).expand.print shouldEqual "x^5 + 5 * x^4 * y + 10 * x^4 + 10 * x^3 * y^2 + 40 * x^3 * y + 40 * x^3 + 10 * x^2 * y^3 + 60 * x^2 * y^2 + 120 * x^2 * y + 80 * x^2 + 5 * x * y^4 + 40 * x * y^3 + 120 * x * y^2 + 160 * x * y + 80 * x + y^5 + 10 * y^4 + 40 * y^3 + 80 * y^2 + 80 * y + 32"
+  }
 }
