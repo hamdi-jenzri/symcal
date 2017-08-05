@@ -60,6 +60,10 @@ sealed trait Expr {
 
   def isConst: Boolean = false
 
+  def isSum: Boolean = false
+
+  def isProduct: Boolean = false
+
   def expand: Expr = expandInternal.simplify
 
   private[symcal] def expandInternal: Sum
@@ -242,6 +246,8 @@ final case class IntPow(x: Expr, d: Const) extends Expr {
 }
 
 final case class Sum(es: Expr*) extends Expr {
+  override def isSum: Boolean = true
+
   override def toInt: Int = es.map(_.toInt).sum
 
   private[symcal] def diffInternal(x: Var): Expr = Sum(es.map(_.diff(x)): _*)
@@ -261,21 +267,29 @@ final case class Sum(es: Expr*) extends Expr {
   }
 
   override def simplify: Expr = {
-    val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
-    // mergedConstants is always non-empty but can be Const(0)
-    val mergedConstants = const.foldLeft[Expr](Const(0))((x, y) ⇒ Const(x.toInt + y.toInt))
-    val mergedExprs = mergedConstants match {
-      case Const(0) ⇒ nonconst
-      case _ ⇒ nonconst :+ mergedConstants
+    val (constants, nonconstants) = es.map(_.simplify).partition(_.isConst)
+    val nonconstantsFlattened: Seq[Expr] = nonconstants.flatMap {
+      case Sum(es@_*) ⇒ es
+      case x => Seq(x) // not a sum
+    }
+    // mergedConstants is the product of all constants in the list; also could be 0 or 1.
+    val mergedConstants: Int = constants
+      .collect { case x@Const(_) ⇒ x } // This converts into Seq[Const]. We know that we are not losing any values here.
+      .map(_.value) // Here we can just get _.value of the `Const`.
+      .reduceOption(_ + _) // This may yield `None` if sequence is empty.
+      .getOrElse(0) // An empty list of `constants` will also produce 0 here.
+    val mergedExprs: Seq[Expr] = mergedConstants match {
+      case 0 ⇒ nonconstantsFlattened
+      case _ ⇒ nonconstantsFlattened :+ Const(mergedConstants)
     }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
       case Some(e) ⇒
         if (mergedExprs.length == 1) {
-          // In this case, the simplified result is not a `Sum`.
+          // In this case, the simplified result is not a `Product`.
           e
         } else Sum(mergedExprs: _*)
-      case None ⇒ Const(0) // Empty sum is transformed into `Const(0)`.
+      case None ⇒ Const(0) // Empty `Sum` is transformed into `Const(0)`.
     }
   }
 
@@ -283,6 +297,8 @@ final case class Sum(es: Expr*) extends Expr {
 }
 
 final case class Product(es: Expr*) extends Expr {
+  override def isProduct: Boolean = true
+
   override def toInt: Int = es.map(_.toInt).product
 
   override def diffInternal(x: Var): Expr = {
@@ -298,15 +314,22 @@ final case class Product(es: Expr*) extends Expr {
   override protected def printInternal: String = es.map(_.stringForm(precedenceLevel)).mkString(" * ")
 
   override def simplify: Expr = {
-    val (const, nonconst) = es.map(_.simplify).partition(_.isConst)
-    // mergedConstants is always non-empty but can be Const(0) or Const(1)
-    val mergedConstants = const.foldLeft[Expr](Const(1))((x, y) ⇒ Const(x.toInt * y.toInt))
-    val mergedExprs =
-      mergedConstants match {
-        case Const(0) ⇒ Seq(Const(0))
-        case Const(1) ⇒ nonconst
-        case _ ⇒ Seq(mergedConstants) ++ nonconst
-      }
+    val (constants, nonconstants) = es.map(_.simplify).partition(_.isConst)
+    val nonconstantsFlattened: Seq[Expr] = nonconstants.flatMap {
+      case Product(es@_*) ⇒ es
+      case x => Seq(x) // not a product
+    }
+    // mergedConstants is the product of all constants in the list; also could be 0 or 1.
+    val mergedConstants: Int = constants
+      .collect { case x@Const(_) ⇒ x } // This converts into Seq[Const]. We know that we are not losing any values here.
+      .map(_.value) // Here we can just get _.value of the `Const`.
+      .reduceOption(_ * _) // This may yield `None` if sequence is empty.
+      .getOrElse(1) // An empty list of `constants` will also produce 1 here.
+    val mergedExprs: Seq[Expr] = mergedConstants match {
+      case 0 ⇒ Seq(Const(0))
+      case 1 ⇒ nonconstantsFlattened
+      case _ ⇒ Seq(Const(mergedConstants)) ++ nonconstantsFlattened
+    }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
       case Some(e) ⇒
@@ -314,7 +337,7 @@ final case class Product(es: Expr*) extends Expr {
           // In this case, the simplified result is not a `Product`.
           e
         } else Product(mergedExprs: _*)
-      case None ⇒ Const(1) // Empty product is transformed into `Const(1)`.
+      case None ⇒ Const(1) // Empty `Product` is transformed into `Const(1)`.
     }
   }
 

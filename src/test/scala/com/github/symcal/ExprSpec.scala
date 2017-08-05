@@ -91,7 +91,7 @@ class ExprSpec extends FlatSpec with Matchers {
 
   it should "evaluate simple expressions" in {
     val x: Var = 'x
-    // Here, x and 'x are the same variable and should be both subsstituted at once.
+    // Here, x and 'x are the same variable and should be both substituted at once.
     ((x + 1) * ('x + 2)).subs(x, 3).toInt shouldEqual 20
 
     val y: Var = 'y
@@ -143,9 +143,10 @@ class ExprSpec extends FlatSpec with Matchers {
     ('x * ('z - 'y)).print shouldEqual "x * (z - y)"
     ('x - ('z + 'y)).print shouldEqual "x - z - y"
     ('x + ('z - 'y)).print shouldEqual "x + z - y"
-    ('x - ('z - 'y)).print shouldEqual "x - (z - y)"
+    ('x - ('z - 'y)).print shouldEqual "x - z + y"
     (('x + 'z) - 'y).print shouldEqual "x + z - y"
     (-('x + 'z) - 'y).print shouldEqual "-(x + z) - y"
+    (-('x + 'z) - 'y).simplify.print shouldEqual "-(x + z) - y"
   }
 
   it should "simplify double minus" in {
@@ -243,8 +244,8 @@ class ExprSpec extends FlatSpec with Matchers {
     } should have message "Cannot evaluate toInt for an expression containing a variable z."
   }
 
-  it should "subsstitute everywhere" in {
-    Sum('x, 1, 'x, 2).subs('x, 'z) shouldEqual Sum('z, 1, 'z, 2)
+  it should "substitute everywhere" in {
+    Sum('x, 1, 'x, 2).subs('x, 'z) shouldEqual Sum('z, 'z, 3)
   }
 
   behavior of "Product"
@@ -264,7 +265,7 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "compute derivative" in {
-    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).print shouldEqual "((z * x + x * z) * (3 + x) + x * z * x) * y"
+    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).print shouldEqual "((z * x + x * z) * (x + 3) + x * z * x) * y"
   }
 
   it should "simplify constants correctly" in {
@@ -293,8 +294,8 @@ class ExprSpec extends FlatSpec with Matchers {
     } should have message "Cannot evaluate toInt for an expression containing a variable z."
   }
 
-  it should "subsstitute everywhere" in {
-    Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product('z, 1, 'z, 2)
+  it should "substitute everywhere" in {
+    Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product(2, 'z, 'z)
   }
 
   behavior of "expand"
