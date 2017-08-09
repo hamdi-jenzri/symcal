@@ -323,6 +323,11 @@ class ExprSpec extends FlatSpec with Matchers {
     ('a * 'a * 'a).expand shouldEqual Product(Var('a), Var('a), Var('a))
   }
 
+  it should "expand nested sums and products" in {
+    ((1 + ('a + 'b) + ('c + 'd)) + 'e).expand shouldEqual 'a + 'b + 'c + 'd + 'e + 1
+    (('a + 'b) * ('a + 'b * 'c * ('d + ('e * 'e + ('f + 'g)) * 'h))).expand shouldEqual 'a * 'a + 'a * 'b * 'c * 'd + 'a * 'b * 'c * 'e * 'e * 'h + 'a * 'b * 'c * 'f * 'h + 'a * 'b * 'c * 'g * 'h + 'b * 'a + 'b * 'b * 'c * 'd + 'b * 'b * 'c * 'e * 'e * 'h + 'b * 'b * 'c * 'f * 'h + 'b * 'b * 'c * 'g * 'h
+  }
+
   behavior of "expand for power"
 
   it should "compute correct multinomial coefficients" in {

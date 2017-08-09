@@ -272,21 +272,20 @@ final case class Sum(es: Expr*) extends Expr {
       case Sum(es@_*) ⇒ es
       case x => Seq(x) // not a sum
     }
-    // mergedConstants is the product of all constants in the list; also could be 0 or 1.
+    // mergedConstants is the sum of all constants in the list; also could be 0.
     val mergedConstants: Int = constants
-      .collect { case x@Const(_) ⇒ x } // This converts into Seq[Const]. We know that we are not losing any values here.
-      .map(_.value) // Here we can just get _.value of the `Const`.
+      .collect { case x@Const(_) ⇒ x.value } // This converts into Seq[Int]. We know that we are not losing any values here.
       .reduceOption(_ + _) // This may yield `None` if sequence is empty.
-      .getOrElse(0) // An empty list of `constants` will also produce 0 here.
+      .getOrElse(0) // An empty sequence of `constants` will produce 0 here.
     val mergedExprs: Seq[Expr] = mergedConstants match {
       case 0 ⇒ nonconstantsFlattened
-      case _ ⇒ nonconstantsFlattened :+ Const(mergedConstants)
+      case _ ⇒ nonconstantsFlattened :+ Const(mergedConstants) // Constant should be last in `Sum`, e.g. `x + y + 2`.
     }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
       case Some(e) ⇒
         if (mergedExprs.length == 1) {
-          // In this case, the simplified result is not a `Product`.
+          // In this case, the simplified result is a `Sum` of just one expression, so should not be a `Sum`.
           e
         } else Sum(mergedExprs: _*)
       case None ⇒ Const(0) // Empty `Sum` is transformed into `Const(0)`.
@@ -321,20 +320,19 @@ final case class Product(es: Expr*) extends Expr {
     }
     // mergedConstants is the product of all constants in the list; also could be 0 or 1.
     val mergedConstants: Int = constants
-      .collect { case x@Const(_) ⇒ x } // This converts into Seq[Const]. We know that we are not losing any values here.
-      .map(_.value) // Here we can just get _.value of the `Const`.
+      .collect { case x@Const(_) ⇒ x.value } // This converts into Seq[Int]. We know that we are not losing any values here.
       .reduceOption(_ * _) // This may yield `None` if sequence is empty.
-      .getOrElse(1) // An empty list of `constants` will also produce 1 here.
+      .getOrElse(1) // An empty sequence of `constants` will produce 1 here.
     val mergedExprs: Seq[Expr] = mergedConstants match {
       case 0 ⇒ Seq(Const(0))
       case 1 ⇒ nonconstantsFlattened
-      case _ ⇒ Seq(Const(mergedConstants)) ++ nonconstantsFlattened
+      case _ ⇒ Seq(Const(mergedConstants)) ++ nonconstantsFlattened // Constant should be first in `Product`, e.g. `2 * x * y`.
     }
     // There are three cases now: empty sequence, one expr, and more than one expr.
     mergedExprs.headOption match {
       case Some(e) ⇒
         if (mergedExprs.length == 1) {
-          // In this case, the simplified result is not a `Product`.
+          // In this case, the simplified result is a `Product` of just one expression, so should not be a `Product`.
           e
         } else Product(mergedExprs: _*)
       case None ⇒ Const(1) // Empty `Product` is transformed into `Const(1)`.
@@ -343,7 +341,7 @@ final case class Product(es: Expr*) extends Expr {
 
   override def expandInternal: Sum = (es.headOption, es.drop(1)) match {
     case (None, _) ⇒ Sum(Const(1)) // empty Product()
-    case (Some(head), tail) ⇒
+    case (Some(head), tail) ⇒ // Product(head, ....tail....)
       val terms = for {
         t <- head.expandInternal.es
         z <- Product(tail: _*).expandInternal.es
@@ -352,6 +350,7 @@ final case class Product(es: Expr*) extends Expr {
   }
 
   /** If any of the multiplicands are a [[Product]], the list is flattened.
+    * This auxiliary function is used to expand a [[Product]] that may contain nested [[Sum]] and [[Product]] expressions.
     *
     * @return A simplified (flattened) but equivalent [[Product]] term.
     */
