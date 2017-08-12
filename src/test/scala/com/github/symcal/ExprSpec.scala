@@ -39,7 +39,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val z = Var('z)
 
     val s = (x + y) * 2 * z
-    s.subs(x, 3).print shouldEqual "(3 + y) * 2 * z"
+    s.subs(x, 3).print shouldEqual "2 * (y + 3) * z"
 
     val t = s.subs(z, 3).diff(y)
     t.toInt shouldEqual 6
@@ -49,7 +49,7 @@ class ExprSpec extends FlatSpec with Matchers {
     (Const(0) + Const(1) + Const(0) + Const(2)).simplify shouldEqual Const(3)
     ((Const(0) * Const(3) + Const(2) * Const(2)) * Const(2)).simplify shouldEqual Const(8)
     (0 + 'x + 1).simplify shouldEqual 'x + 1
-    (1 + 0 + 'x + 1).simplify shouldEqual 1 + 'x + 1
+    (1 + 0 + 'x + 1).simplify shouldEqual 'x + 2
   }
 
   behavior of "derivative"
@@ -98,7 +98,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val ex1 = ('x + 1) * (2 * x + y)
     val ex2 = ex1.subs(x, 3)
     val ex3 = ex2.subs(y, 4)
-    ex2 shouldEqual 4 * (6 + y)
+    ex2 shouldEqual 4 * (y + 6)
     ex3 shouldEqual Const(40)
   }
 
@@ -141,11 +141,12 @@ class ExprSpec extends FlatSpec with Matchers {
     (-(-'x - 1)).print shouldEqual "-(-x - 1)"
     ('x * (-'y)).print shouldEqual "x * (-y)"
     ('x * ('z - 'y)).print shouldEqual "x * (z - y)"
-    ('x - ('z + 'y)).print shouldEqual "x - (z + y)"
+    ('x - ('z + 'y)).print shouldEqual "x - z - y"
     ('x + ('z - 'y)).print shouldEqual "x + z - y"
-    ('x - ('z - 'y)).print shouldEqual "x - (z - y)"
+    ('x - ('z - 'y)).print shouldEqual "x - z + y"
     (('x + 'z) - 'y).print shouldEqual "x + z - y"
     (-('x + 'z) - 'y).print shouldEqual "-(x + z) - y"
+    (-('x + 'z) - 'y).simplify.print shouldEqual "-(x + z) - y"
   }
 
   it should "simplify double minus" in {
@@ -205,7 +206,7 @@ class ExprSpec extends FlatSpec with Matchers {
 
   it should "print minus correctly" in {
     ('a + (-'b)).print shouldEqual "a - b"
-    ('a - (-'b)).print shouldEqual "a - (-b)"
+    ('a - (-'b)).print shouldEqual "a + b"
   }
 
   it should "compute derivative" in {
@@ -230,6 +231,11 @@ class ExprSpec extends FlatSpec with Matchers {
     Sum('x, 1, 2, 'x, 0, 'x, 0, 0, 3).simplify shouldEqual Sum('x, 'x, 'x, 6)
   }
 
+  it should "simplify Sum(Sum(y, z), x))" in {
+    val s = Sum(Sum('y, 'z), 'x)
+    s.simplify shouldEqual 'y + 'z + 'x
+  }
+
   it should "convert to int" in {
     Sum(0, 1, 2, 0, 0, 0, 3).toInt shouldEqual 6
 
@@ -239,7 +245,7 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "substitute everywhere" in {
-    Sum('x, 1, 'x, 2).subs('x, 'z) shouldEqual Sum('z, 1, 'z, 2)
+    Sum('x, 1, 'x, 2).subs('x, 'z) shouldEqual Sum('z, 'z, 3)
   }
 
   behavior of "Product"
@@ -259,7 +265,7 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "compute derivative" in {
-    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).print shouldEqual "((z * x + x * z) * (3 + x) + x * z * x) * y"
+    Product(1, Product('x * 'z * 'x, 3 + 'x), 'y).diff('x).print shouldEqual "((z * x + x * z) * (x + 3) + x * z * x) * y"
   }
 
   it should "simplify constants correctly" in {
@@ -289,7 +295,7 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "substitute everywhere" in {
-    Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product('z, 1, 'z, 2)
+    Product('x, 1, 'x, 2).subs('x, 'z) shouldEqual Product(2, 'z, 'z)
   }
 
   behavior of "expand"
@@ -315,6 +321,11 @@ class ExprSpec extends FlatSpec with Matchers {
     (('a + 1) * ('a + 1) * ('a + 1)).expand.print shouldEqual "a * a * a + a * a + a * a + a + a * a + a + a + 1"
 
     ('a * 'a * 'a).expand shouldEqual Product(Var('a), Var('a), Var('a))
+  }
+
+  it should "expand nested sums and products" in {
+    ((1 + ('a + 'b) + ('c + 'd)) + 'e).expand shouldEqual 'a + 'b + 'c + 'd + 'e + 1
+    (('a + 'b) * ('a + 'b * 'c * ('d + ('e * 'e + ('f + 'g)) * 'h))).expand shouldEqual 'a * 'a + 'a * 'b * 'c * 'd + 'a * 'b * 'c * 'e * 'e * 'h + 'a * 'b * 'c * 'f * 'h + 'a * 'b * 'c * 'g * 'h + 'b * 'a + 'b * 'b * 'c * 'd + 'b * 'b * 'c * 'e * 'e * 'h + 'b * 'b * 'c * 'f * 'h + 'b * 'b * 'c * 'g * 'h
   }
 
   behavior of "expand for power"
