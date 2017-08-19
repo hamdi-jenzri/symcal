@@ -2,26 +2,34 @@ package com.github.symcal
 
 import org.scalatest.{FlatSpec, Matchers}
 
-class ExprSpec extends FlatSpec with Matchers {
+class ExprIntSpec extends FlatSpec with Matchers {
+
+  import spire.implicits.IntAlgebra
+
+  // In this test, everything will be of type `Expr[Int]` by default because we only imported the `IntAlgebra` implicits.
+  // Then we do not need to write `Var[Int]` everywhere, and `1 + 'x` work automatically.
+  // Also, `'x + 'y` will be automatically converted to `Expr[Int]` without having to write `Var[Int]('x) + Var[Int]('y)`.
 
   behavior of "Expr Plus"
 
   it should "create Expr" in {
     val x = Var('x)
-    x.isInstanceOf[Expr] shouldEqual true
+    x.isInstanceOf[Expr[Int]] shouldEqual true
     val y = x + Const(1)
-    y.isInstanceOf[Expr] shouldEqual true
+    y.isInstanceOf[Expr[Int]] shouldEqual true
+    val z = 2 + 'z
+    z.isInstanceOf[Expr[Int]] shouldEqual true
   }
 
   it should "evaluate to Int" in {
     val x = Const(1)
-    x.toInt shouldEqual 1
+    x.toValue shouldEqual 1
     val y = x + Const(1)
-    y.toInt shouldEqual 2
+    y.toValue shouldEqual 2
     the[Exception] thrownBy {
       val z = Var('z)
-      (z + y).toInt
-    } should have message "Cannot evaluate toInt for an expression containing a variable z."
+      (z + y).toValue
+    } should have message "Cannot evaluate toValue for an expression containing a variable z."
   }
 
   it should "print expressions" in {
@@ -31,7 +39,33 @@ class ExprSpec extends FlatSpec with Matchers {
     (z + y).print shouldEqual "z + 1 + 1"
   }
 
+  it should "create expressions from multiplication and subtraction" in {
+    val x = - 'z
+    x.isInstanceOf[Expr[Int]] shouldEqual true
+
+    val y = 2 - 'y
+    y.isInstanceOf[Expr[Int]] shouldEqual true
+
+    val z = 2 * 'z
+    z.isInstanceOf[Expr[Int]] shouldEqual true
+  }
+
   behavior of "automatic simplify"
+
+  it should "run example from README verbatim" in {
+//    import spire.implicits.IntAlgebra
+
+    val x = Var('x)
+    val y = Var('y)
+    val z = Var('z)
+
+    val s = (x + y) * 2 * z
+
+    print(s.subs(x, 3).print) // prints "(3 + y) * 2 * z"
+
+    val t = s.subs(z, 3).diff(y)
+    assert(t.toValue == 6)
+  }
 
   it should "run test example from README" in {
     val x = Var('x)
@@ -42,7 +76,7 @@ class ExprSpec extends FlatSpec with Matchers {
     s.subs(x, 3).print shouldEqual "2 * (y + 3) * z"
 
     val t = s.subs(z, 3).diff(y)
-    t.toInt shouldEqual 6
+    t.toValue shouldEqual 6
   }
 
   it should "simplify constants" in {
@@ -69,7 +103,7 @@ class ExprSpec extends FlatSpec with Matchers {
     (x * (y + z)).diff(x) shouldEqual y + z
     (x * (y + z)).diff(y) shouldEqual x
     (x * y * x).diff(x) shouldEqual y * x + x * y
-    (z * u).toInt shouldEqual 3
+    (z * u).toValue shouldEqual 3
     (z * u).simplify shouldEqual u
   }
 
@@ -79,7 +113,7 @@ class ExprSpec extends FlatSpec with Matchers {
     val z = Const(1)
     (x #^ 4).diff(x) shouldEqual 4 * x #^ 3
     (Const(3) #^ 2).simplify shouldEqual Const(9)
-    (Const(3) #^ 2).toInt shouldEqual 9
+    (Const(3) #^ 2).toValue shouldEqual 9
     (z #^ 3).simplify shouldEqual Const(1)
     (Const(3) #^ 1).simplify shouldEqual Const(3)
     (Const(3) #^ 0).simplify shouldEqual Const(1)
@@ -90,11 +124,11 @@ class ExprSpec extends FlatSpec with Matchers {
   behavior of "substitution"
 
   it should "evaluate simple expressions" in {
-    val x: Var = 'x
+    val x: Var[Int] = 'x
     // Here, x and 'x are the same variable and should be both substituted at once.
-    ((x + 1) * ('x + 2)).subs(x, 3).toInt shouldEqual 20
+    ((x + 1) * ('x + 2)).subs(x, 3).toValue shouldEqual 20
 
-    val y: Var = 'y
+    val y: Var[Int] = 'y
     val ex1 = ('x + 1) * (2 * x + y)
     val ex2 = ex1.subs(x, 3)
     val ex3 = ex2.subs(y, 4)
@@ -156,9 +190,9 @@ class ExprSpec extends FlatSpec with Matchers {
   it should "simplify constants" in {
     (Const(1) - 2 + 3).simplify shouldEqual Const(2)
     (-Const(1) - 2 + 3).simplify shouldEqual Const(0)
-    (-('x - 1)).subs(Var('x), 0).toInt shouldEqual 1
-    (-('x - 1)).diff('x).toInt shouldEqual -1
-    (-(-'x)).simplify shouldEqual ('x: Expr)
+    (-('x - 1)).subs(Var('x), 0).toValue shouldEqual 1
+    (-('x - 1)).diff('x).toValue shouldEqual -1
+    (-(-'x)).simplify shouldEqual ('x: Expr[Int])
   }
 
   it should "do everything" in {
@@ -168,14 +202,14 @@ class ExprSpec extends FlatSpec with Matchers {
     p.diff('x) shouldEqual x + x + 10
     val q = p.subs(y, x + 1)
     q shouldEqual x * x - (x + 1) * (x + 1) + 10 * x + 20000
-    q.subs('x, 2).toInt shouldEqual 20015
+    q.subs('x, 2).toValue shouldEqual 20015
   }
 
   behavior of "freeVars"
 
   it should "compute empty set for an expression with no variables" in {
     val x = Const(1)
-    Expr.freeVars(x) shouldEqual Set[Var]()
+    Expr.freeVars(x) shouldEqual Set[Var[Int]]()
   }
 
   it should "compute a set of vars" in {
@@ -197,7 +231,7 @@ class ExprSpec extends FlatSpec with Matchers {
     y1.print shouldEqual "1 + x * z + y"
     val y = Sum(1, 'x + 'z, 'y)
     y.print shouldEqual "1 + x + z + y"
-    val s: Seq[Expr] = Seq(1, Sum('x + 'z, 'x + 3), 'y)
+    val s: Seq[Expr[Int]] = Seq(1, Sum('x + 'z, 'x + 3), 'y)
     val z = Sum(s: _*)
     z.print shouldEqual "1 + x + z + x + 3 + y"
     val t = 'x * z
@@ -210,7 +244,7 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "compute derivative" in {
-    val s: Seq[Expr] = Seq(1, Sum('x * 'z * 'x, 3 + 'x), 'y)
+    val s: Seq[Expr[Int]] = Seq(1, Sum('x * 'z * 'x, 3 + 'x), 'y)
     val z = Sum(s: _*)
     val z_diff_x = z.diff('x)
     z_diff_x.print shouldEqual "z * x + x * z + 1"
@@ -237,11 +271,11 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "convert to int" in {
-    Sum(0, 1, 2, 0, 0, 0, 3).toInt shouldEqual 6
+    Sum(0, 1, 2, 0, 0, 0, 3).toValue shouldEqual 6
 
     the[Exception] thrownBy {
-      Sum(0, 1, 2, 0, 'z, 0, 'x, 3).toInt shouldEqual 6
-    } should have message "Cannot evaluate toInt for an expression containing a variable z."
+      Sum(0, 1, 2, 0, 'z, 0, 'x, 3).toValue shouldEqual 6
+    } should have message "Cannot evaluate toValue for an expression containing a variable z."
   }
 
   it should "substitute everywhere" in {
@@ -257,7 +291,7 @@ class ExprSpec extends FlatSpec with Matchers {
     y1.print shouldEqual "1 * (x + z) * y"
     val y = Product(1, 'x * 'z, 'y)
     y.print shouldEqual "1 * x * z * y"
-    val s: Seq[Expr] = Seq(1, Product('x + 'z, 'x + 3, 'z), 'y)
+    val s: Seq[Expr[Int]] = Seq(1, Product('x + 'z, 'x + 3, 'z), 'y)
     val z = Product(s: _*)
     z.print shouldEqual "1 * (x + z) * (x + 3) * z * y"
     val t = 'x * z
@@ -287,11 +321,11 @@ class ExprSpec extends FlatSpec with Matchers {
   }
 
   it should "convert to int" in {
-    Product(1, 2, 1, 1, 1, 1, 3).toInt shouldEqual 6
+    Product(1, 2, 1, 1, 1, 1, 3).toValue shouldEqual 6
 
     the[Exception] thrownBy {
-      Product(0, 1, 2, 0, 'z, 0, 'x, 3).toInt shouldEqual 6
-    } should have message "Cannot evaluate toInt for an expression containing a variable z."
+      Product(0, 1, 2, 0, 'z, 0, 'x, 3).toValue shouldEqual 6
+    } should have message "Cannot evaluate toValue for an expression containing a variable z."
   }
 
   it should "substitute everywhere" in {
@@ -323,9 +357,21 @@ class ExprSpec extends FlatSpec with Matchers {
     ('a * 'a * 'a).expand shouldEqual Product(Var('a), Var('a), Var('a))
   }
 
+  def r: Int = scala.util.Random.nextInt(64)
+
   it should "expand nested sums and products" in {
     ((1 + ('a + 'b) + ('c + 'd)) + 'e).expand shouldEqual 'a + 'b + 'c + 'd + 'e + 1
-    (('a + 'b) * ('a + 'b * 'c * ('d + ('e * 'e + ('f + 'g)) * 'h))).expand shouldEqual 'a * 'a + 'a * 'b * 'c * 'd + 'a * 'b * 'c * 'e * 'e * 'h + 'a * 'b * 'c * 'f * 'h + 'a * 'b * 'c * 'g * 'h + 'b * 'a + 'b * 'b * 'c * 'd + 'b * 'b * 'c * 'e * 'e * 'h + 'b * 'b * 'c * 'f * 'h + 'b * 'b * 'c * 'g * 'h
+    val shortExpr = ('a + 'b) * ('a + 'b * 'c * ('d + ('e * 'e + ('f + 'g)) * 'h))
+    val longExpr = 'a * 'a + 'a * 'b * 'c * 'd + 'a * 'b * 'c * 'e * 'e * 'h + 'a * 'b * 'c * 'f * 'h +
+      'a * 'b * 'c * 'g * 'h + 'b * 'a + 'b * 'b * 'c * 'd + 'b * 'b * 'c * 'e * 'e * 'h +
+      'b * 'b * 'c * 'f * 'h + 'b * 'b * 'c * 'g * 'h
+    shortExpr.expand shouldEqual longExpr
+    // Polynomial values must match after substituting random integers for the variables.
+    (1 to 100).foreach { _ ⇒
+      val (a, b, c, d, e, f, g, h) = (r, r, r, r, r, r, r, r)
+      shortExpr.subs('a, a).subs('b, b).subs('c, c).subs('d, d).subs('e, e).subs('f, f).subs('g, g).subs('h, h).toValue shouldEqual
+        longExpr.subs('a, a).subs('b, b).subs('c, c).subs('d, d).subs('e, e).subs('f, f).subs('g, g).subs('h, h).toValue
+    }
   }
 
   behavior of "expand for power"
@@ -340,7 +386,17 @@ class ExprSpec extends FlatSpec with Matchers {
     (('x + 'y) #^ 1).expand.print shouldEqual "x + y"
     (('x + 'y) #^ 2).expand.print shouldEqual "x^2 + 2 * x * y + y^2"
     (('x + 'y) #^ 3).expand.print shouldEqual "x^3 + 3 * x^2 * y + 3 * x * y^2 + y^3"
-    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + 3 * a^2 * b + 3 * a^2 * c + 3 * a * b^2 + 6 * a * b * c + 3 * a * c^2 + b^3 + 3 * b^2 * c + 3 * b * c^2 + c^3"
-    (('x + 'y + 2) #^ 5).expand.print shouldEqual "x^5 + 5 * x^4 * y + 10 * x^4 + 10 * x^3 * y^2 + 40 * x^3 * y + 40 * x^3 + 10 * x^2 * y^3 + 60 * x^2 * y^2 + 120 * x^2 * y + 80 * x^2 + 5 * x * y^4 + 40 * x * y^3 + 120 * x * y^2 + 160 * x * y + 80 * x + y^5 + 10 * y^4 + 40 * y^3 + 80 * y^2 + 80 * y + 32"
+    (('a + 'b + 'c) #^ 3).expand.print shouldEqual "a^3 + 3 * a^2 * b + 3 * a^2 * c + 3 * a * b^2 + 6 * a * b * c +" +
+      " 3 * a * c^2 + b^3 + 3 * b^2 * c + 3 * b * c^2 + c^3"
+    val shortExpr = ('x + 'y + 2) #^ 5
+    val longExpr = 'x #^ 5 + 5 * 'x #^ 4 * 'y + 10 * 'x #^ 4 + 10 * 'x #^ 3 * 'y #^ 2 + 40 * 'x #^ 3 * 'y + 40 * 'x #^ 3 +
+      10 * 'x #^ 2 * 'y #^ 3 + 60 * 'x #^ 2 * 'y #^ 2 + 120 * 'x #^ 2 * 'y + 80 * 'x #^ 2 + 5 * 'x * 'y #^ 4 + 40 * 'x * 'y #^ 3 +
+      120 * 'x * 'y #^ 2 + 160 * 'x * 'y + 80 * 'x + 'y #^ 5 + 10 * 'y #^ 4 + 40 * 'y #^ 3 + 80 * 'y #^ 2 + 80 * 'y + 32
+    shortExpr.expand shouldEqual longExpr
+    // Polynomial values must match after substituting random integers for the variables.
+    (1 to 100).foreach { _ ⇒
+      val (x, y) = (r, r)
+      shortExpr.subs('x, x).subs('y, y).toValue shouldEqual longExpr.subs('x, x).subs('y, y).toValue
+    }
   }
 }
