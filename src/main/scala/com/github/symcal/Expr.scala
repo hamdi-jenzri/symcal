@@ -38,7 +38,7 @@ sealed abstract class Expr[T: Ring : Eq] {
 
   def printToScala: String = print
 
-  def toFunc: Seq[Double] => Double = {
+  final def toFunc: Seq[Double] => Double = {
     val vars = freeVars.toSeq.map(_.name.name).sorted
     ScalaCompiledFunction.compile[Seq[Double] => Double](s"case Seq(${vars.mkString(",")})" -> printToScala,
       "Seq[Double] ⇒ Double")

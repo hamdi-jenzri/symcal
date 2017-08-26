@@ -53,7 +53,6 @@ class ExprIntSpec extends FlatSpec with Matchers {
   behavior of "automatic simplify"
 
   it should "run example from README verbatim" in {
-//    import spire.implicits.IntAlgebra
 
     val x = Var('x)
     val y = Var('y)
