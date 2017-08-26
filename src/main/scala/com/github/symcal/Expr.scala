@@ -104,7 +104,7 @@ object Expr {
 
   def constOne[T: Ring : Eq] = Const(implicitly[Ring[T]].one)
 
-  def intToConst[T: Ring : Eq](x: Int): Const[T] = Const(implicitly[Ring[T]].fromInt(x))
+  implicit def intToConst[T: Ring : Eq](x: Int): Const[T] = Const(implicitly[Ring[T]].fromInt(x))
 
   /** Auxiliary function. Returns the sequence of coefficients and powers for multinomial expansion.
     * For example, to compute the expansion `(x + y)^3` we call `getTermCoeffs(2, 3)`, which returns the sequence
