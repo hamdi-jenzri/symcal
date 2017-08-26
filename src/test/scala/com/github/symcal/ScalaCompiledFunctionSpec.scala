@@ -7,7 +7,7 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
   behavior of "scala compiled function"
 
   it should "compile and run simple functions" in {
-    val func = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" -> "x / 2")
+    val func = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" -> "x / 2", "Double ⇒ Double")
     func(125) shouldEqual 62.5
     func(125.0) shouldEqual 62.5
     func(0) shouldEqual 0
@@ -19,7 +19,7 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
 
     val compileAndRunTimes = (1 to total).map { i ⇒
       val initTime = System.nanoTime()
-      val f = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" → s"x + $i")
+      val f = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" → s"x + $i", "Double ⇒ Double")
       val compiled = System.nanoTime()
       f(125)
       val evaluated = System.nanoTime()
@@ -35,7 +35,7 @@ class ScalaCompiledFunctionSpec extends FlatSpec with Matchers {
 
   it should "measure JVM-amortized time for running a trigonometric function" in {
     val total = 100000
-    val f = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" → "Math.sin(x + 1)") // using scala.math.sin is significantly slower
+    val f = ScalaCompiledFunction.compile[Double ⇒ Double]("x: Double" → "Math.sin(x + 1)", "Double ⇒ Double") // using scala.math.sin is significantly slower
     val resultsRaw = (1 to total).map { i ⇒
       val initTime = System.nanoTime()
       val x = f(125)

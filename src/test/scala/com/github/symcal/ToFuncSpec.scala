@@ -6,14 +6,19 @@ import spire.implicits.DoubleAlgebra
 class ToFuncSpec extends FlatSpec with Matchers {
 
   it should "convert simple Expr to function" in {
-    val expr = 'x + 1
+    val expr: Expr[Double] = 'x + 1.0
     val f = expr.toFunc
-    f(2) shouldEqual 3
+    f(Seq(2)) shouldEqual 3
   }
 
-  it should "an Expr with 2 Vars" in {
-    val expr = 'y - 'x + 1
+  it should "convert an Expr with 2 Vars to function" in {
+    val expr = 'y - 'x + 1.0
     val f = expr.toFunc
-    f(x = 2, y = 1) shouldEqual 0
+    f(Seq(2, 1)) shouldEqual 0
+  }
+
+  it should "toFunc Expr with IntPow" in {
+    val x_3 = 'x #^ 3
+    x_3.toFunc(Seq(2)) shouldEqual 8
   }
 }

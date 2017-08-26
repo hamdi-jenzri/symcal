@@ -36,6 +36,14 @@ sealed abstract class Expr[T: Ring : Eq] {
 
   def toValue: T
 
+  def printToScala: String = print
+
+  def toFunc: Seq[Double] => Double = {
+    val vars = freeVars.toSeq.map(_.name.name).sorted
+    ScalaCompiledFunction.compile[Seq[Double] => Double](s"case Seq(${vars.mkString(",")})" -> printToScala,
+      "Seq[Double] ⇒ Double")
+  }
+
   final def diff(x: Var[T]): Expr[T] = diffInternal(x).simplify
 
   private[symcal] def diffInternal(x: Var[T]): Expr[T]
@@ -228,6 +236,8 @@ final case class IntPow[T: Ring : Eq](x: Expr[T], d: Const[Int]) extends Expr[T]
   override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = IntPow(x.subsInternal(v, e), d).simplify
 
   override def printInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.print
+
+  override def printToScala: String = s"math.pow(${x.printToScala}, ${d.printToScala})"
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
