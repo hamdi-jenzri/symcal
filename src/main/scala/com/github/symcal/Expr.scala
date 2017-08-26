@@ -237,7 +237,7 @@ final case class IntPow[T: Ring : Eq](x: Expr[T], d: Const[Int]) extends Expr[T]
 
   override def printInternal: String = x.stringForm(precedenceLevel + 1) + "^" + d.print
 
-  override def printToScala: String = s"math.pow(${x.printToScala}, ${d.printToScala})"
+  override def printToScala: String = s"scala.math.pow(${x.printToScala}, ${d.printToScala})"
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
