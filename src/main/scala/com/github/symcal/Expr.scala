@@ -54,13 +54,24 @@ sealed abstract class Expr[T: Ring : Eq] {
 
   def precedenceLevel: Int
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String
 
-  protected def formatterForScala(precedencePrinter: (Expr[T], Int) ⇒ String): String = formatterForText(precedencePrinter)
+  protected def printerForScala(precedencePrinter: (Expr[T], Int) ⇒ String): String = printerForText(precedencePrinter)
 
-  final def print: String = Expr.printWithFormatter[T](this, _.formatterForText)
+  final def print: String = runPrinter(_.printerForText)
 
-  final def printToScala: String = Expr.printWithFormatter[T](this, _.formatterForScala)
+  final def printToScala: String = runPrinter(_.printerForScala)
+
+  private[symcal] def runPrinter(
+    formatter: Expr[T] ⇒ ((Expr[T], Int) ⇒ String) ⇒ String,
+    outerPrecedence: Int = Expr.zeroPrecedence
+  ): String = {
+    val innerFormatted = formatter(this) { (ex, precedence) ⇒
+      ex.runPrinter(formatter, precedence)
+    }
+
+    Expr.addParentheses(outerPrecedence, this.precedenceLevel, innerFormatted)
+  }
 
   final def freeVars: Set[Var[T]] = Expr.freeVars(this)
 
@@ -81,16 +92,6 @@ object Expr {
       "(" + printedWithoutOuterParentheses + ")"
     else
       printedWithoutOuterParentheses
-  }
-
-  private[symcal] def printWithFormatter[T: Ring : Eq](
-    expr: Expr[T],
-    formatter: Expr[T] ⇒ ((Expr[T], Int) ⇒ String) ⇒ String,
-    outerPrecedence: Int = Expr.zeroPrecedence
-  ): String = {
-    addParentheses(outerPrecedence, expr.precedenceLevel, formatter(expr) { (ex, prec) ⇒
-      printWithFormatter(ex, formatter, prec)
-    })
   }
 
   /** If this implicit conversion is moved to `package.scala`, the expression 4 + Var('x) does not compile.
@@ -180,7 +181,7 @@ final case class Const[T: Ring : Eq](value: T) extends Expr[T] {
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = value.toString
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = value.toString
 
   override def simplify: Expr[T] = this
 
@@ -198,7 +199,7 @@ final case class Minus[T: Ring : Eq](x: Expr[T]) extends Expr[T] {
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String =
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String =
     "-" + precedencePrinter(x, precedenceLevel)
 
   override def simplify: Expr[T] = x.simplify match {
@@ -223,7 +224,7 @@ final case class Var[T: Ring : Eq](name: Symbol) extends Expr[T] {
     case _ ⇒ this
   }
 
-  protected override def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = name.name
+  protected override def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = name.name
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
@@ -250,11 +251,11 @@ final case class IntPow[T: Ring : Eq](x: Expr[T], d: Const[Int]) extends Expr[T]
 
   override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = IntPow(x.subsInternal(v, e), d).simplify
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = {
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = {
     precedencePrinter(x, precedenceLevel + 1) + "^" + d.toValue.toString
   }
 
-  protected override def formatterForScala(precedencePrinter: (Expr[T], Int) ⇒ String): String =
+  protected override def printerForScala(precedencePrinter: (Expr[T], Int) ⇒ String): String =
     s"scala.math.pow(${precedencePrinter(x, Expr.zeroPrecedence)}, ${d.toValue.toString})"
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
@@ -292,7 +293,7 @@ final case class Sum[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = es.headOption match {
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String = es.headOption match {
     case None ⇒ "0" // empty Sum()
     case Some(head) ⇒ precedencePrinter(head, precedenceLevel) +
       es.drop(1).map {
@@ -348,7 +349,7 @@ final case class Product[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
-  protected def formatterForText(precedencePrinter: (Expr[T], Int) ⇒ String): String =
+  protected def printerForText(precedencePrinter: (Expr[T], Int) ⇒ String): String =
     es.map(precedencePrinter(_, precedenceLevel)).mkString(" * ")
 
   override def simplify: Expr[T] = {
