@@ -2,6 +2,7 @@ package com.github.symcal
 
 import spire.algebra._
 import spire.implicits._
+
 import scala.language.implicitConversions
 
 sealed abstract class Expr[T: Ring : Eq] {
@@ -57,23 +58,31 @@ sealed abstract class Expr[T: Ring : Eq] {
   /** This type describes a printing function that will correctly add parentheses
     * around the expression if the expression's own precedence is lower than the outer precedence.
     */
-  private[symcal] type PrecedenceAwarePrinter = (Expr[T], Int) ⇒ String
+  private[symcal] type SubExprPrinter = (Expr[T], Int) ⇒ String
+
+  /** This type describes a printing function that, given a subexpression printer, will produce a printed
+    * representation with correctly inserted parentheses at all nesting levels of the expression.
+    */
+  private[symcal] type PrinterWithPrecedence = (SubExprPrinter ⇒ String)
 
   /** Internal method that produces a printed representation of the expression.
-    * It is parameterized by a [[PrecedenceAwarePrinter]],
+    * It is parameterized by a [[SubExprPrinter]],
     * which will be used to print sub-expressions (that is, any parts
-    * of the main expression that is itself an [[Expr]] and needs to be traversed).
+    * of the main expression that is itself an [[Expr]] and needs to be traversed)
+    * using a specified outer precedence.
+    *
+    * Note that this method has type [[Expr]]`[T] => `[[PrinterWithPrecedence]], if we count the implicit `this` argument.
     *
     * Case classes extending [[Expr]] need to implement `printerForText()` and `printerForScala()`
     * by calling `printWithPrecedence()` whenever they need to print any sub-expressions.
     *
-    * @param printWithPrecedence A function that prints an expression with given precedence.
+    * @param printWithPrecedence A function that prints subexpressions with given outer precedence.
     * @return String representation of expression.
     */
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String
 
-  /** This method produces the same results as `printerForText` except for [[IntPow]] where an override is given. */
-  protected def printerForScala(printWithPrecedence: PrecedenceAwarePrinter): String = printerForText(printWithPrecedence)
+  /** This method is the same as `printerForText` except for [[IntPow]] where an override is given. */
+  protected def printerForScala(printWithPrecedence: SubExprPrinter): String = printerForText(printWithPrecedence)
 
   final def print: String = runPrinter(_.printerForText)
 
@@ -83,25 +92,26 @@ sealed abstract class Expr[T: Ring : Eq] {
     * with additional flexibility of either plain text or Scala code syntax.
     *
     * @param getPrinter      A function that, given an [[Expr]], produces either a `printerForText` or a `printerForScala` function.
-    * @param outerPrecedence Precedence level of the outer expression that encloses this expression; by default, `Expr.zeroPrecedence`.
+    * @param outerPrecedence Precedence level of the outer expression that encloses this expression.
+    *                        When there is no outer expression, use the value `Expr.zeroPrecedence`, which is the default.
     * @return A string representation of the expression `this`.
     */
   final private def runPrinter(
-    getPrinter: Expr[T] ⇒ PrecedenceAwarePrinter ⇒ String,
+    getPrinter: Expr[T] ⇒ PrinterWithPrecedence,
     outerPrecedence: Int = Expr.zeroPrecedence
   ): String = {
-    val printWithPrecedence: PrecedenceAwarePrinter = { (ex, precedence) ⇒
+    val subexprPrinter: SubExprPrinter = { (ex, precedence) ⇒
       // Call `runPrinter` recursively on `ex`, with the specified precedence, and with the same `getPrinter`.
       // This will be called during the recursive traversal of the expression tree, on each subexpression `ex`.
       ex.runPrinter(getPrinter, precedence)
     }
     // The call `getPrinter(this)` yields a `printerForText` or a `printerForScala`,
     // whose implementations also depend on which case class `this` is.
-    val printer: (PrecedenceAwarePrinter ⇒ String) = getPrinter(this)
+    val printer: PrinterWithPrecedence = getPrinter(this)
 
     // Now we use the printer to produce a string representation of the inner expression,
     // so far without the outer parentheses.
-    val innerFormatted: String = printer(printWithPrecedence)
+    val innerFormatted: String = printer(subexprPrinter)
 
     // Now we add the outer parentheses, if needed.
     Expr.addParentheses(outerPrecedence, this.precedenceLevel, innerFormatted)
@@ -121,7 +131,11 @@ sealed abstract class Expr[T: Ring : Eq] {
 }
 
 object Expr {
-  private[symcal] final def addParentheses(outerLevel: Int, innerLevel: Int, printedWithoutOuterParentheses: String): String = {
+  private[symcal] final def addParentheses(
+    outerLevel: Int,
+    innerLevel: Int,
+    printedWithoutOuterParentheses: String
+  ): String = {
     if (innerLevel < outerLevel)
       "(" + printedWithoutOuterParentheses + ")"
     else
@@ -132,6 +146,26 @@ object Expr {
     */
   implicit def valueToConst[T: Ring : Eq](x: T): Const[T] = Const(x)
 
+  /** These constants describe the precedence of various infix operators.
+    * Parentheses are inserted whenever an operation with low precedence is enclosed
+    * in a context with higher precedence.
+    * Additionally, certain operations use special conventions depending on whether
+    * the enclosed operation is on the left or on the right, etc.
+    *
+    * To describe this, we use the concept of **outer precedence**.
+    * Each expression (constant, add, subtract, etc.) has a `precedenceLevel`.
+    * A **subexpression** is an expression that is enclosed within another expression.
+    * For example, `2 * (x + 1)` is an expression with subexpressions `2` and `x + 1`.
+    *
+    * Suppose we have a subexpression with precedence `p` enclosed within another expression,
+    * and we need to determine whether parentheses need to be inserted around the subexpression.
+    * We define the **outer precedence of the subexpression** as a certain effective precedence value `q`
+    * such that parentheses need to be inserted if and only if `p < q`.
+    *
+    * In most cases, `q` will be equal to the precedence of the enclosing expression.
+    * In some cases, such as subtraction or powers, this is not true any more, and instead `q` needs
+    * to be defined in a special way.
+    */
   final val zeroPrecedence = 0
   final val precedenceOfAdd = 20
   final val precedenceOfSubtract = 30
@@ -155,7 +189,8 @@ object Expr {
 
   implicit final def intToConst[T: Ring : Eq](x: Int): Const[T] = Const(implicitly[Ring[T]].fromInt(x))
 
-  /** Auxiliary function. Returns the sequence of coefficients and powers for multinomial expansion.
+  /** Auxiliary function that returns the sequence of coefficients and powers for multinomial expansion.
+    *
     * For example, to compute the expansion `(x + y)^3` we call `getTermCoeffs(2, 3)`, which returns the sequence
     * {{{
     *   Seq(
@@ -165,6 +200,7 @@ object Expr {
     *     (1, Seq(0, 3))
     *   )
     * }}}
+    *
     * This allows us to build the expansion as `x^3 + 3*x^2*y + 3*x*y^2 + y^3`.
     *
     * @param len   Length of the sum list to be expanded.
@@ -211,17 +247,17 @@ final case class Const[T: Ring : Eq](value: T) extends Expr[T] {
 
   private[symcal] def diffInternal(x: Var[T]): Expr[T] = Expr.constZero[T]
 
-  private[symcal] override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = this
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = this
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String = value.toString
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String = value.toString
 
   override def simplify: Expr[T] = this
 
   override def isConst: Boolean = true
 
-  private[symcal] override def expandInternal: Sum[T] = Sum(this)
+  private[symcal] def expandInternal: Sum[T] = Sum(this)
 }
 
 final case class Minus[T: Ring : Eq](x: Expr[T]) extends Expr[T] {
@@ -229,11 +265,11 @@ final case class Minus[T: Ring : Eq](x: Expr[T]) extends Expr[T] {
 
   private[symcal] def diffInternal(z: Var[T]): Expr[T] = -x.diff(z)
 
-  override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = (-x.subsInternal(v, e)).simplify
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = (-x.subsInternal(v, e)).simplify
 
   override def precedenceLevel: Int = Expr.precedenceOfMinus
 
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String =
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String =
     "-" + printWithPrecedence(x, precedenceLevel)
 
   override def simplify: Expr[T] = x.simplify match {
@@ -242,7 +278,7 @@ final case class Minus[T: Ring : Eq](x: Expr[T]) extends Expr[T] {
     case xs => Minus(xs)
   }
 
-  override def expandInternal: Sum[T] = Sum(x.expandInternal.es.map(-_): _*)
+  private[symcal] def expandInternal: Sum[T] = Sum(x.expandInternal.es.map(-_): _*)
 }
 
 final case class Var[T: Ring : Eq](name: Symbol) extends Expr[T] {
@@ -253,18 +289,18 @@ final case class Var[T: Ring : Eq](name: Symbol) extends Expr[T] {
     if (name == x.name) Expr.constOne[T] else Expr.constZero[T]
   }
 
-  override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = v match {
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = v match {
     case Var(`name`) ⇒ e
     case _ ⇒ this
   }
 
-  protected override def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String = name.name
+  protected override def printerForText(printWithPrecedence: SubExprPrinter): String = name.name
 
   override def precedenceLevel: Int = Expr.precedenceOfConst
 
   override def simplify: Expr[T] = this
 
-  override def expandInternal: Sum[T] = Sum(this)
+  private[symcal] def expandInternal: Sum[T] = Sum(this)
 }
 
 final case class IntPow[T: Ring : Eq](x: Expr[T], d: Const[Int]) extends Expr[T] {
@@ -283,18 +319,18 @@ final case class IntPow[T: Ring : Eq](x: Expr[T], d: Const[Int]) extends Expr[T]
     case (xs, _) ⇒ IntPow(xs, d)
   }
 
-  override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = IntPow(x.subsInternal(v, e), d).simplify
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = IntPow(x.subsInternal(v, e), d).simplify
 
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String = {
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String = {
     printWithPrecedence(x, precedenceLevel + 1) + "^" + d.toValue.toString
   }
 
-  protected override def printerForScala(printWithPrecedence: PrecedenceAwarePrinter): String =
+  protected override def printerForScala(printWithPrecedence: SubExprPrinter): String =
     s"scala.math.pow(${printWithPrecedence(x, Expr.zeroPrecedence)}, ${d.toValue.toString})"
 
   override def precedenceLevel: Int = Expr.precedenceOfIntPow
 
-  private[symcal] override def expandInternal: Sum[T] =
+  private[symcal] def expandInternal: Sum[T] =
     if (d.toValue >= 0) {
       // We can expand only if the exponent is non-negative.
       val xs = x.expandInternal.es
@@ -323,11 +359,11 @@ final case class Sum[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
 
   private[symcal] def diffInternal(x: Var[T]): Expr[T] = Sum(es.map(_.diff(x)): _*)
 
-  private[symcal] override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = Sum(es.map(_.subsInternal(v, e)): _*)
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = Sum(es.map(_.subsInternal(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfAdd
 
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String = es.headOption match {
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String = es.headOption match {
     case None ⇒ "0" // empty Sum()
     case Some(head) ⇒ printWithPrecedence(head, precedenceLevel) +
       es.drop(1).map {
@@ -365,7 +401,7 @@ final case class Sum[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
     }
   }
 
-  override def expandInternal: Sum[T] = Sum(es.flatMap(_.expandInternal.es): _*)
+  def expandInternal: Sum[T] = Sum(es.flatMap(_.expandInternal.es): _*)
 }
 
 final case class Product[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
@@ -373,17 +409,17 @@ final case class Product[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
 
   override def toValue: T = es.map(_.toValue).reduceOption(_ * _).getOrElse(implicitly[Ring[T]].one)
 
-  override def diffInternal(x: Var[T]): Expr[T] = {
+  private[symcal] def diffInternal(x: Var[T]): Expr[T] = {
     val diffs = es.map(_.diff(x))
     val replaced = diffs.zipWithIndex.map { case (expr, index) ⇒ Product(es.updated(index, expr): _*) }
     Sum(replaced: _*)
   }
 
-  override def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = Product(es.map(_.subsInternal(v, e)): _*)
+  private[symcal] def subsInternal(v: Var[T], e: Expr[T]): Expr[T] = Product(es.map(_.subsInternal(v, e)): _*)
 
   override def precedenceLevel: Int = Expr.precedenceOfMultiply
 
-  protected def printerForText(printWithPrecedence: PrecedenceAwarePrinter): String =
+  protected def printerForText(printWithPrecedence: SubExprPrinter): String =
     es.map(printWithPrecedence(_, precedenceLevel)).mkString(" * ")
 
   override def simplify: Expr[T] = {
@@ -415,7 +451,7 @@ final case class Product[T: Ring : Eq](es: Expr[T]*) extends Expr[T] {
     }
   }
 
-  override def expandInternal: Sum[T] = (es.headOption, es.drop(1)) match {
+  private[symcal] def expandInternal: Sum[T] = (es.headOption, es.drop(1)) match {
     case (None, _) ⇒ Sum(Expr.constOne[T]) // empty Product()
     case (Some(head), tail) ⇒ // Product(head, ....tail....)
       val terms = for {
